@@ -1,5 +1,5 @@
 # Determinant
-This project aims to develop a cloud-friendly chatbot using open-source models and components. The chatbot will be built on top of a serverless architecture, allowing for scalability and cost-efficiency. The open-source models and components used in this project will enable the chatbot to be easily customized and improved by the community.
+This project aims to develop a cloud-friendly chatbot using open-source models and components. The chatbot will be built on top of a serverless architecture, allowing for scalability and cost-efficiency. The open-source models and components used in this project will enable the chatbot to be easily customized and improved by the users.
 
 ## Features
 The chatbot will have the following features:
