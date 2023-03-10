@@ -1,0 +1,19 @@
+# https://docs.ray.io/en/latest/cluster/kubernetes/getting-started.html#kuberay-quickstart
+python3.9 -m pip install -U "ray[default]"
+
+brew install kind
+
+# make sure there's a Docker daemon running
+kind create cluster
+
+kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.4.0&timeout=90s"
+
+kubectl -n ray-system get pod --selector=app.kubernetes.io/component=kuberay-operator
+
+# Deploy a sample Ray Cluster CR from the KubeRay repo:
+kubectl apply -f https://raw.githubusercontent.com/ray-project/kuberay/master/ray-operator/config/samples/ray-cluster.autoscaler.yaml
+
+kubectl get raycluster
+
+# View the pods in the Ray cluster named "raycluster-autoscaler"
+kubectl get pods --selector=ray.io/cluster=raycluster-autoscaler
