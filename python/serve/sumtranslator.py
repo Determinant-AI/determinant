@@ -17,6 +17,7 @@ class Summarizer2(Summarizer):
         english_text: str = await http_request.json()
         summary = self.summarize(english_text)
 
+        # issue an async call to the translate method
         translation_ref = await self.translator.translate.remote(summary)
         translation = await translation_ref
 
@@ -25,16 +26,24 @@ class Summarizer2(Summarizer):
 
 # bind Translator deployment to arguments that Ray Serve can pass to its constructor
 sumtranslator = Summarizer2.bind(Translator.bind())
+
+# serve run sumtranslator:sumtranslator
 serve.run(sumtranslator)
 
 
-english_text = """
+english_text1 = (
+    "It was the best of times, it was the worst of times, it was the age "
+    "of wisdom, it was the age of foolishness, it was the epoch of belief"
+)
+
+english_text2 = """
 There are two main methods to elicit chain-of-thought reasoning: few-shot prompting and zero-shot prompting. The initial proposition of CoT prompting demonstrated few-shot prompting, wherein at least one example of a question paired with proper human-written CoT reasoning is prepended to the prompt.[2] It has been discovered since, however, that it is also possible to elicit similar reasoning and performance gain with zero-shot prompting, which can be as simple as appending to the prompt the words "Let's think step-by-step".[15] This allows for better scaling as one no longer needs to prompt engineer specific CoT prompts for each task to get the corresponding boost in performance.[16]
 """
 
+
 url = "http://127.0.0.1:8000/"
-response = requests.post(url, json=english_text)
-summarized_text = response.text
 
-
-print(summarized_text)
+for text in [english_text1, english_text2]:
+    response = requests.post(url, json=text)
+    summarized_french = response.text
+    print(summarized_french)
