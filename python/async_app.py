@@ -25,7 +25,6 @@ import asyncio
 
 from transformers import pipeline
 import ray
-token = "xoxb-4904090965495-4979773796723-GKKqMCjHA0ZlNnwr87pvTuQi"
 
 @ray.remote
 class MemoryStore(object):
@@ -129,6 +128,7 @@ class ImageCaptioningBot:
         max_length = 16
         num_beams = 4
         gen_kwargs = {"max_length": max_length, "num_beams": num_beams}
+        token = os.environ["SLACK_BOT_TOKEN"]
         response = requests.get(image_url, headers={'Authorization': 'Bearer %s' % token})
         image = Image.open(BytesIO(response.content))
         if image.mode != "RGB":
