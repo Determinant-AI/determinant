@@ -2,7 +2,6 @@ import logging
 import os
 from io import BytesIO
 
-import ray
 import requests
 import torch
 from fastapi import FastAPI, Request
@@ -124,7 +123,6 @@ class FastAPIDeployment:
     async def interactions_endpoint(self, req: Request) -> None:
         return await self.app_handler.handle(req)
 
-
  # model deployment
 conversation_bot = ConversationBot.bind()
 image_captioning_bot = ImageCaptioningBot.bind()
@@ -133,5 +131,5 @@ image_captioning_bot = ImageCaptioningBot.bind()
 fast_api_deployment = FastAPIDeployment.bind(
     conversation_bot, image_captioning_bot)
 
-# serve build async_app_fan:fast_api_deployment -o async_app_fan.yaml
+# serve build async_app_fan:fast_api_deployment -o ../deployment/async_app_serve.yaml
 # serve build async_app_fan:fast_api_deployment -k
