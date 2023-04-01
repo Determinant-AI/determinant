@@ -195,7 +195,7 @@ spec:
           medium: Memory
       containers:
       - name: ray-worker
-        image: rayproject/ray:2.3.0
+        image: rayproject/ray:2.3.0-py39
         imagePullPolicy: Always
         command: ["/bin/bash", "-c", "--"]
         args:

@@ -1,0 +1,4 @@
+ docker build -t my_async_app_fan:latest .
+ gcloud auth configure-docker
+ docker tag my_async_app_fan:latest gcr.io/chatbot-alpha-380206/async_app_slack:latest
+ docker push gcr.io/chatbot-alpha-380206/async_app_slack:latest

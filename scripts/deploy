@@ -1,0 +1,7 @@
+kubectl cp requirements.txt raycluster-autoscaler-head-j48vl:/tmp/requirements.txt
+
+kubectl exec -it raycluster-autoscaler-head-j48vl -- bash -c "pip install -r /tmp/requirements.txt"
+kubectl exec -it raycluster-autoscaler-head-j48vl -- bash -c "pip install --upgrade pip; pip install -r /tmp/requirements.txt"
+kubectl cp python/async_app_fan.py raycluster-autoscaler-head-j48vl:/tmp/async_app_fan.py
+
+kubectl exec -it raycluster-autoscaler-head-j48vl -- bash -c ray-head "python /tmp/async_app_fan.py"
