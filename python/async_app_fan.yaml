@@ -1,0 +1,26 @@
+# This file was generated using the `serve build` command on Ray v2.3.0.
+
+import_path: async_app_fan:fast_api_deployment
+
+container:
+  image: gcr.io/chatbot-alpha-380206/async_app_slack:latest
+  
+runtime_env:
+  env_from:
+    - secretRef:
+        name: slack-secrets
+
+host: 0.0.0.0
+
+port: 8000
+
+deployments:
+
+- name: ConversationBot
+  num_replicas: 2
+
+- name: ImageCaptioningBot
+  user_config: {}
+
+- name: FastAPIDeployment
+  route_prefix: /

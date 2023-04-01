@@ -72,3 +72,21 @@ For production use-cases, you would typically either:
 ```
 ray job submit --address http://localhost:8265 -- python -c "import ray; ray.init(); print(ray.cluster_resources())"
 ```
+
+## Delete Ray cluster
+```
+kubectl delete raycluster raycluster-autoscaler
+```
+
+## Deleting the KubeRay operator
+In typical operation, the KubeRay operator should be left as a long-running process that manages many Ray clusters. If you would like to delete the operator and associated resources, run
+```
+kubectl delete -k ray/kuberay/ray-operator/config/default
+```
+
+## Put secrets on K8s Secrets
+```
+kubectl create secret generic slack-secrets \
+  --from-literal=SLACK_API_TOKEN="your_slack_api_token" \
+  --from-literal=SLACK_SIGNING_SECRET="your_slack_signing_secret"
+```
