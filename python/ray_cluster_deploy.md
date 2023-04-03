@@ -1,11 +1,9 @@
 ## Deploying the KubeRay operator
 
-### 1. git clone `kuberay` repo[https://github.com/ray-project/kuberay/]
-
-### 2. Create the KubeRay operator and all of the resources it needs.
+### Create the KubeRay operator and all of the resources it needs.
 
 ```
-kubectl create -k ray/kuberay/ray-operator/config/default
+kubectl create -k deployment/config/default
 ```
 
 Confirm that the operator is running in the namespace `ray-system`
@@ -55,6 +53,11 @@ kubectl exec $head_pod -it -c ray-head -- python -c "import ray; ray.init()"
 ```
 
 ## Ray job submission
+List all services with IP and ports
+```
+kubectl get services
+```
+
 identify the Ray head service:
 ```
 kubectl get service raycluster-autoscaler-head-svc

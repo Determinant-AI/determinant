@@ -40,7 +40,7 @@ class ConversationBot:
         return response_text
 
 
-@serve.deployment(user_config={})
+@serve.deployment()
 class ImageCaptioningBot:
     def __init__(self):
         self.model = VisionEncoderDecoderModel.from_pretrained(
@@ -133,3 +133,6 @@ fast_api_deployment = FastAPIDeployment.bind(
 
 # serve build async_app_fan:fast_api_deployment -o ../deployment/async_app_serve.yaml
 # serve build async_app_fan:fast_api_deployment -k
+# serve run async_app_fan:fast_api_deployment -p 3000
+
+# serve.run(target=fast_api_deployment, port=3000)

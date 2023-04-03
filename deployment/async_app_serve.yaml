@@ -2,13 +2,7 @@
 
 import_path: async_app_fan:fast_api_deployment
 
-container:
-  image: gcr.io/chatbot-alpha-380206/async_app_slack:latest
-  
-runtime_env:
-  env_from:
-    - secretRef:
-        name: slack-secrets
+runtime_env: {"working_dir": "gs://ray_serve_apps/slackbot/slackbot.zip", "env_vars":{"SLACK_BOT_TOKEN": "xxxxxxxxx", "SLACK_SIGNING_SECRET": "xxxxxxxxxx", "GOOGLE_APPLICATION_CREDENTIALS": "/home/ray/chatbot-alpha-380206-xxxx.json"}}
 
 host: 0.0.0.0
 
@@ -20,7 +14,6 @@ deployments:
   num_replicas: 2
 
 - name: ImageCaptioningBot
-  user_config: {}
 
 - name: FastAPIDeployment
   route_prefix: /

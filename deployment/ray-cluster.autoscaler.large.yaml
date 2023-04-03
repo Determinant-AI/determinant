@@ -74,18 +74,18 @@ spec:
         containers:
         # The Ray head container
         - name: ray-head
-          image: rayproject/ray:2.3.0
+          image: gcr.io/chatbot-alpha-380206/ray_py39_custom:v0.0.3
           # Optimal resource allocation will depend on your Kubernetes infrastructure and might
           # require some experimentation.
           # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal
           # resource accounting. K8s requests are not used by Ray.
           resources:
             limits:
-              cpu: 14
-              memory: 54Gi
+              cpu: 4
+              memory: 8Gi
             requests:
-              cpu: 14
-              memory: 54Gi
+              cpu: 4
+              memory: 8Gi
           ports:
           - containerPort: 6379
             name: gcs
@@ -93,6 +93,8 @@ spec:
             name: dashboard
           - containerPort: 10001
             name: client
+          - containerPort: 52365
+            name: agent
           lifecycle:
             preStop:
               exec:
@@ -133,18 +135,18 @@ spec:
           command: ['sh', '-c', "until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for K8s Service $RAY_IP; sleep 2; done"]
         containers:
         - name: ray-worker
-          image: rayproject/ray:2.3.0
+          image: gcr.io/chatbot-alpha-380206/ray_py39_custom:v0.0.3
           # Optimal resource allocation will depend on your Kubernetes infrastructure and might
           # require some experimentation.
           # Setting requests=limits is recommended with Ray. K8s limits are used for Ray-internal
           # resource accounting. K8s requests are not used by Ray.
           resources:
             limits:
-              cpu: 14
-              memory: 54Gi
+              cpu: 4
+              memory: 8Gi
             requests:
-              cpu: 14
-              memory: 54Gi
+              cpu: 4
+              memory: 8Gi
           lifecycle:
             preStop:
               exec:

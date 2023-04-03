@@ -1,22 +1,26 @@
 # Use the official Python base image
-FROM python:3.9
+FROM rayproject/ray:7ee908-py39-cpu
 
-# Set the working directory
-WORKDIR /app
+# Switch to root user
+USER root
+
+# Update package list and install required dependencies
+RUN apt-get update && \
+    apt-get install -y curl gnupg
+
+# Add Google Cloud SDK repository
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+
+# Import Google Cloud public key
+RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+
+# Update package list to include Google Cloud SDK repository
+RUN apt-get update && apt-get install google-cloud-cli
+
+USER ray
 
 # Copy the requirements.txt file into the container
-COPY requirements.txt .
-
-RUN pip install --upgrade pip
+COPY requirements_.txt .
 
 # Install the dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the application code into the container
-COPY python/async_app_fan.py .
-
-# Expose the port the application will run on (if needed)
-EXPOSE 8000
-
-# Run the command to start the application
-CMD ["python", "async_app_fan.py"]
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements_.txt
