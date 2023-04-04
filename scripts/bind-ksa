@@ -1,0 +1,24 @@
+# check the ray head node KSA
+kubectl describe pod raycluster-autoscaler-head-8nrqd -o yaml
+
+# bind the ray head (K8s Service Account) KSA to the GSA (Google Service Account)
+gcloud iam service-accounts add-iam-policy-binding \
+    --role roles/iam.workloadIdentityUser \
+    --member "serviceAccount:chatbot-alpha-380206.svc.id.goog[default/raycluster-autoscaler]" \
+    chatbot-alpha@chatbot-alpha-380206.iam.gserviceaccount.com
+
+# check the ray worker node KSA
+kubectl describe pod raycluster-autoscaler-worker-large-group-725wl -o yaml
+
+# bind the ray worker (K8s Service Account) KSA to the GSA (Google Service Account)
+gcloud iam service-accounts add-iam-policy-binding chatbot-alpha@chatbot-alpha-380206.iam.gserviceaccount.com \
+    --role roles/iam.workloadIdentityUser \
+    --member "serviceAccount:chatbot-alpha-380206.svc.id.goog[default/default]"
+
+# check the available KSA in the k8s cluster
+kubectl get serviceaccounts
+
+# annotate the KSA to use GSA
+kubectl annotate serviceaccount --overwrite raycluster-autoscaler "iam.gke.io/gcp-service-account=chatbot-alpha@chatbot-alpha-380206.iam.gserviceaccount.com"
+
+kubectl annotate serviceaccount --overwrite default "iam.gke.io/gcp-service-account=chatbot-alpha@chatbot-alpha-380206.iam.gserviceaccount.com"

@@ -1,7 +1,9 @@
-kubectl cp requirements.txt raycluster-autoscaler-head-j48vl:/tmp/requirements.txt
+# copy the serve config yaml to the head pod.
+kubectl cp deployment/async_app_serve.yaml raycluster-autoscaler-head-j48vl:/ray/home/async_app_serve.yaml
 
-kubectl exec -it raycluster-autoscaler-head-j48vl -- bash -c "pip install -r /tmp/requirements.txt"
-kubectl exec -it raycluster-autoscaler-head-j48vl -- bash -c "pip install --upgrade pip; pip install -r /tmp/requirements.txt"
-kubectl cp python/async_app_fan.py raycluster-autoscaler-head-j48vl:/tmp/async_app_fan.py
+# ssh to the head pod
+kubectl exec -it raycluster-autoscaler-head-j48vl -c ray-head -- bash
 
-kubectl exec -it raycluster-autoscaler-head-j48vl -- bash -c ray-head "python /tmp/async_app_fan.py"
+# deploy the serve app
+serve apply /ray/home/async_app_serve.yaml
+
