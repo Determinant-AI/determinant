@@ -1,0 +1,47 @@
+# model_composition.yaml
+models:
+  - class_name: ConversationBot
+    function: generate_next
+    input_type: human_text
+    deploy_args:
+      num_replicas: 2
+      resources:
+        memory: 1Gi
+        cpu: 1
+        gpu: 0
+  - class_name: ImageCaptioningBot
+    function: caption_image
+    input_type: image_url
+    deploy_args:
+      num_replicas: 1
+      resources:
+        memory: 512Mi
+        cpu: 1
+        gpu: 0
+  - class_name: FastAPIDeployment
+    function: handle_app_mention
+    input_type: image
+    deploy_args:
+      num_replicas: 3
+      resources:
+        memory: 2Gi
+        cpu: 2
+        gpu: 0
+    dependencies:
+      - ImageCaptioningBot
+      - ConversationBot
+#   - class_name: MangoStandClass
+#     num_replicas: 2
+#     route_prefix: null
+#     max_concurrent_queries: 100
+#     user_config:
+#       price: 5
+#     autoscaling_config: null
+#     graceful_shutdown_wait_loop_s: 2.0
+#     graceful_shutdown_timeout_s: 20.0
+#     health_check_period_s: 10.0
+#     health_check_timeout_s: 30.0
+#     ray_actor_options: null
+
+
+# # contruct DAG 
