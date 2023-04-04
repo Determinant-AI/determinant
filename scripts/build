@@ -1,0 +1,4 @@
+docker build -t ray_py39_custom:v0.0.1 .
+gcloud auth configure-docker
+docker tag ray_py39_custom:v0.0.1 gcr.io/chatbot-alpha-380206/ray_py39_custom:v0.0.1
+docker push gcr.io/chatbot-alpha-380206/ray_py39_custom:v0.0.1

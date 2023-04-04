@@ -1,0 +1,9 @@
+# copy the serve config yaml to the head pod.
+kubectl cp deployment/async_app_serve.yaml raycluster-autoscaler-head-j48vl:/ray/home/async_app_serve.yaml
+
+# ssh to the head pod
+kubectl exec -it raycluster-autoscaler-head-j48vl -c ray-head -- bash
+
+# deploy the serve app
+serve apply /ray/home/async_app_serve.yaml
+

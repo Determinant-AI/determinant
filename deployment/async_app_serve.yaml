@@ -1,0 +1,19 @@
+# This file was generated using the `serve build` command on Ray v2.3.0.
+
+import_path: async_app_fan:fast_api_deployment
+
+runtime_env: {"working_dir": "gs://ray_serve_apps/slackbot/slackbot.zip", "env_vars":{"SLACK_BOT_TOKEN": "xxxxxxxxx", "SLACK_SIGNING_SECRET": "xxxxxxxxxx", "GOOGLE_APPLICATION_CREDENTIALS": "/home/ray/chatbot-alpha-380206-xxxx.json"}}
+
+host: 0.0.0.0
+
+port: 8000
+
+deployments:
+
+- name: ConversationBot
+  num_replicas: 2
+
+- name: ImageCaptioningBot
+
+- name: FastAPIDeployment
+  route_prefix: /
