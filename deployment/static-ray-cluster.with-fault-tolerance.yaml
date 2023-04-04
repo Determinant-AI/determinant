@@ -125,7 +125,7 @@ spec:
           medium: Memory
       containers:
         - name: ray-head
-          image: rayproject/ray:2.3.0
+          image: gcr.io/chatbot-alpha-380206/ray_py39_custom:v0.0.3
           imagePullPolicy: Always
           command: [ "/bin/bash", "-c", "--" ]
           # if there is no password for Redis, set --redis-password=''
@@ -195,7 +195,7 @@ spec:
           medium: Memory
       containers:
       - name: ray-worker
-        image: rayproject/ray:2.3.0-py39
+        image: gcr.io/chatbot-alpha-380206/ray_py39_custom:v0.0.3
         imagePullPolicy: Always
         command: ["/bin/bash", "-c", "--"]
         args:
