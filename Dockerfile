@@ -22,5 +22,9 @@ USER ray
 # Copy the requirements.txt file into the container
 COPY requirements_.txt .
 
+# Install the package in editable mode
+cd python
+pip install -e .
+
 # Install the dependencies
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements_.txt
