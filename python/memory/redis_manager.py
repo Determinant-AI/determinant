@@ -52,20 +52,14 @@ class RedisManager:
         return redis.Redis(host=host, port=port)
 
     def insert_list_strings(self, list_key: str, strings_to_insert: List[str]) -> bool:
-        try:
-            # Use * to unpack the list of strings as separate arguments to rpush
+        # Use * to unpack the list of strings as separate arguments to rpush
             return self.redis_conn.rpush(list_key, *strings_to_insert) > 0
-        except redis.exceptions.RedisError as e:
-            logger.error(f"Failed to insert list of strings: {e}")
-            return False
 
     def get_list_strings(self, list_key: str) -> Optional[List[str]]:
-        try:
-            list_contents = self.redis_conn.lrange(list_key, 0, -1)
-            return [item.decode() for item in list_contents]
-        except redis.exceptions.RedisError as e:
-            logger.error(f"Failed to get list contents: {e}")
-            return []
+        # If the specified key does not exist or if the key is associated with a data type 
+        # other than a list, an empty list will be returned
+        list_contents = self.redis_conn.lrange(list_key, 0, -1)
+        return [item.decode() for item in list_contents]
 
     def show_all_keys_and_values(self) -> None:
         try:
@@ -98,6 +92,6 @@ class RedisManager:
         """
         try:
             self.redis_conn.shutdown()
-            print("Redis server has been shut down gracefully.")
+            logger.info("Redis server has been shut down gracefully.")
         except Exception as e:
-            print(f"Failed to shut down Redis server: {e}")
+            logger.error(f"Failed to shut down Redis server: {e}")

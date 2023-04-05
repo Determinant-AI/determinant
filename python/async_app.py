@@ -1,12 +1,12 @@
-import logging
 import os
-from typing import Dict, List
+from typing import Dict, List, Any, Optional
+
 from PIL import Image
 import requests
 from io import BytesIO
 
-logging.basicConfig(level=logging.INFO)
 import torch
+from transformers import pipeline
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
@@ -19,23 +19,18 @@ from slack_bolt.adapter.starlette.handler import SlackRequestHandler
 import requests
 from slack_sdk.signature import SignatureVerifier
 
+import logging
+# Configure the logger.
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-import asyncio
 
-from transformers import pipeline
-import ray
-
-from langchain.chains.conversation.memory import ConversationBufferMemory
-from collections import deque
-
-
-from slack_bolt.async_app import AsyncApp
-from typing import Dict, Any, Optional
+import redis
 from memory.redis_manager import RedisManager
 
-fastapi_app = FastAPI()
 
+fastapi_app = FastAPI()
 
 @serve.deployment(route_prefix="/")
 @serve.ingress(fastapi_app)
@@ -66,9 +61,13 @@ class SlackAgent:
                     event["files"][0]["url_private"]
                 )
         else:
-            response_ref = await self.conversation_bot.generate_next.remote(
-                thread_ts, human_text
-            )
+            try:
+                response_ref = await self.conversation_bot.generate_next.remote(
+                    thread_ts, human_text
+                )
+            except redis.exceptions.RedisError as e:
+                logger.error(f"Failed to insert list of strings {strings_to_insert}: {e}")
+
 
         await say(await response_ref, thread_ts=thread_ts)
 
@@ -113,8 +112,15 @@ class ConversationBot:
     def generate_next(self, key: str, human_text: str) -> str:
         if self.knowledge != "":
             self.knowledge = "[KNOWLEDGE] " + self.knowledge
-        self.memory.insert_list_strings(key, [human_text])
-        dialog = self.memory.get_list_strings(key)
+        try:
+            self.memory.insert_list_strings(key, [human_text])
+        except redis.exceptions.RedisError as e:
+            logger.error(f"Failed to insert list of strings {strings_to_insert}: {e}")
+        try:
+            dialog = self.memory.get_list_strings(key)
+        except redis.exceptions.RedisError as e:
+            logger.error(f"Failed to get a list of strings keyed by {list_key}: {e}")
+
         logger.debug("dialog:{}".format(dialog))
         dialog = " EOS ".join(dialog)
         query = f"{self.instruction} [CONTEXT] {dialog} {self.knowledge}"
@@ -123,7 +129,12 @@ class ConversationBot:
             input_ids, max_length=128, min_length=8, top_p=0.9, do_sample=True
         )
         output = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        self.memory.insert_list_strings(key, output)
+
+        try:
+            self.memory.insert_list_strings(key, output)
+        except redis.exceptions.RedisError as e:
+            logger.error(f"Failed to insert list of strings {strings_to_insert}: {e}")
+
         return output
 
 
