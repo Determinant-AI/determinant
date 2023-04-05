@@ -53,7 +53,7 @@ class RedisManager:
 
     def insert_list_strings(self, list_key: str, strings_to_insert: List[str]) -> bool:
         # Use * to unpack the list of strings as separate arguments to rpush
-            return self.redis_conn.rpush(list_key, *strings_to_insert) > 0
+        return self.redis_conn.rpush(list_key, *strings_to_insert) > 0
 
     def get_list_strings(self, list_key: str) -> Optional[List[str]]:
         # If the specified key does not exist or if the key is associated with a data type 
