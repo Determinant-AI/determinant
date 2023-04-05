@@ -30,40 +30,9 @@ from langchain.chains.conversation.memory import ConversationBufferMemory
 from collections import deque
 
 
-@ray.remote
-class MemoryStore(object):
-    def __init__(self):
-        self.value = 0
-        self._memory = {}
-
-    def get_memory(self, key: str) -> List[str]:
-        if key in self._memory:
-            return self._memory[key]
-        else:
-            return []
-
-    def add_to_memory(self, key: str, context: str):
-        if (key in self._memory) and (context not in self._memory[key]):
-            self._memory[key].append(context)
-        elif key not in self._memory:
-            self._memory[key] = deque(maxlen=20)
-            self._memory[key].append(context)
-        return True
-
-
-# Create an actor from this class.
-memory_buffer = MemoryStore.remote()
-
-
 from slack_bolt.async_app import AsyncApp
 from typing import Dict, Any, Optional
-
-
-local_deployment = os.environ.get("DB_HOST") == "localhost"
-verify_requests = True
-if local_deployment:
-    verify_requests = False
-
+from memory.redis_manager import RedisManager
 
 fastapi_app = FastAPI()
 
@@ -78,7 +47,7 @@ class SlackAgent:
         self.slack_app = AsyncApp(
             token=os.environ["SLACK_BOT_TOKEN"],
             signing_secret=os.environ["SLACK_SIGNING_SECRET"],
-            request_verification_enabled=False,
+            request_verification_enabled=True,
         )
         self.app_handler = AsyncSlackRequestHandler(self.slack_app)
         self.slack_app.event("app_mention")(self.handle_app_mention)
@@ -127,7 +96,7 @@ class SlackAgent:
 
 @serve.deployment(num_replicas=1)
 class ConversationBot:
-    def __init__(self, memory_buffer):
+    def __init__(self, memory_buffer: RedisManager):
         self.tokenizer = AutoTokenizer.from_pretrained(
             "microsoft/GODEL-v1_1-large-seq2seq"
         )
@@ -144,9 +113,9 @@ class ConversationBot:
     def generate_next(self, key: str, human_text: str) -> str:
         if self.knowledge != "":
             self.knowledge = "[KNOWLEDGE] " + self.knowledge
-        self.memory.add_to_memory.remote(key, human_text)
-        dialog = ray.get(self.memory.get_memory.remote(key))
-        print("dialog:{}".format(dialog))
+        self.memory.insert_list_strings(key, [human_text])
+        dialog = self.memory.get_list_strings(key)
+        logger.debug("dialog:{}".format(dialog))
         dialog = " EOS ".join(dialog)
         query = f"{self.instruction} [CONTEXT] {dialog} {self.knowledge}"
         input_ids = self.tokenizer(f"{query}", return_tensors="pt").input_ids
@@ -154,7 +123,7 @@ class ConversationBot:
             input_ids, max_length=128, min_length=8, top_p=0.9, do_sample=True
         )
         output = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        ray.get(self.memory.add_to_memory.remote(key, output))
+        self.memory.insert_list_strings(key, output)
         return output
 
 
@@ -203,6 +172,7 @@ class ImageCaptioningBot:
 
 
 # model deployment
+memory_buffer = RedisManager()
 conversation_bot = ConversationBot.bind(memory_buffer)
 image_captioning_bot = ImageCaptioningBot.bind()
 
