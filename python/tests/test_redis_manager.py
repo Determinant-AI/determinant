@@ -1,38 +1,39 @@
 import pytest
 import fakeredis
 from typing import List, Optional
-from memory.redis_manager import RedisManager
-from redis.exceptions import RedisError
+from memory.redis_manager import RedisManager 
 
-# Create a fixture that sets up and tears down a mock Redis server
+# Define a fixture to create a RedisManager instance with a fakeredis connection
 @pytest.fixture
 def redis_manager():
-    fake_redis = fakeredis.FakeStrictRedis()
-    manager = RedisManager(redis_conn=fake_redis)
-    yield manager
-    fake_redis.flushall()
+    fake_redis_conn = fakeredis.FakeRedis()
+    return RedisManager(redis_conn=fake_redis_conn)
 
-def test_insert_list_strings_success(redis_manager):
-    # Mock successful rpush operation
-    # redis_manager.redis_conn.rpush.return_value = 2
-    # Test the method
-    assert redis_manager.insert_list_strings('fruits', ['apple', 'banana']) == 2
+def test_insert_list_strings(redis_manager):
+    # Define sample data
+    list_key = 'test_list_key'
+    strings_to_insert = ['apple', 'banana', 'cherry']
 
-def test_insert_list_strings_failure(redis_manager):
-    # Mock RedisError
-    # redis_manager.redis_conn.rpush.side_effect = RedisError('Failed to insert list')
-    # Test the method
-    assert not redis_manager.insert_list_strings('fruits', ['apple', 'banana'])
+    # Call the insert_list_strings method and check the result
+    assert redis_manager.insert_list_strings(list_key, strings_to_insert)
 
-def test_get_list_strings_success(redis_manager):
-    # Mock successful lrange operation
-    redis_manager.redis_conn.lrange.return_value = [b'apple', b'banana']
-    # Test the method
-    assert redis_manager.get_list_strings('fruits') == ['apple', 'banana']
+    # Retrieve the list from the fake Redis server and check its contents
+    result = redis_manager.redis_conn.lrange(list_key, 0, -1)
+    expected_result = [item.encode() for item in strings_to_insert]
+    assert result == expected_result
 
-def test_get_list_strings_failure(redis_manager):
-    # Mock RedisError
-    redis_manager.redis_conn.lrange.side_effect = RedisError('Failed to get list contents')
-    # Test the method
-    assert redis_manager.get_list_strings('fruits') == []
+def test_get_list_strings(redis_manager):
+    # Define sample data
+    list_key = 'test_list_key'
+    list_contents = ['apple', 'banana', 'cherry']
+
+    # Insert the sample data into the fake Redis server
+    redis_manager.redis_conn.rpush(list_key, *list_contents)
+
+    # Call the get_list_strings method and check the result
+    result = redis_manager.get_list_strings(list_key)
+    expected_result = list_contents
+    assert result == expected_result
+
+# You can add additional test functions for other methods of the RedisManager class
 
