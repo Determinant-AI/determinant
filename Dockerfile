@@ -22,9 +22,10 @@ USER ray
 # Copy the requirements.txt file into the container
 COPY requirements_.txt .
 
-# Install the package in editable mode
-cd python
-pip install -e .
+# Install the package 
+RUN pip install --upgrade pip
+RUN pip install setuptools==41.0.0
+RUN python python/setup.py install
 
 # Install the dependencies
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements_.txt
+# pip install --no-cache-dir -r requirements_.txt
