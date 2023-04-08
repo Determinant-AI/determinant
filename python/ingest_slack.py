@@ -36,13 +36,14 @@ chatbot = 'B04UT1HM21H'
 
 
 class SlackIngestor:
-    def __init__(self, token: str, channel_name_list: List[str], folder: str = None, bots: List[str] = None):
+    def __init__(self, token: str, channel_name_list: List[str], maximum_messages_cnt: int, folder: str = None, bots: List[str] = None):
         self.client = slack.WebClient(token=token)
         self.channels = channel_name_list
+        self.limit = maximum_messages_cnt
         self.bots = bots
         self.folder = folder
 
-    def fetch_message_history(self, channel_id: str, limit: int = 10):
+    def fetch_message_history(self, channel_id: str, limit: int = 1000):
         try:
             result = self.client.conversations_history(
                 channel=channel_id, limit=limit)
@@ -122,7 +123,7 @@ if __name__ == "__main__":
     # Get the Slack API token.
     token = os.environ["SLACK_BOT_TOKEN"]
     ingestor = SlackIngestor(token, channel_name_list=[
-                             "general"], folder="./test-slack-ingest/")
+                             "general"], maximum_messages_cnt=10, folder="./test-slack-ingest/")
 
     # Ingest Slack messages.
     ingestor.ingest_slack_messages()
