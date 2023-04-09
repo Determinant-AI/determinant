@@ -17,10 +17,25 @@ RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyri
 # Update package list to include Google Cloud SDK repository
 RUN apt-get update && apt-get install google-cloud-cli
 
-USER ray
+# Assuming that setup.py is in the root of your source code,
+# copy the entire source code directory into the container
+COPY . /app
+
+# Change the working directory
+WORKDIR /app
+
 
 # Copy the requirements.txt file into the container
 COPY requirements_.txt .
 
+# Install the package 
+RUN pip install --upgrade pip
+
+# Update pip and setuptools to the latest version
+RUN pip install --upgrade pip setuptools
+RUN python python/setup.py install
+
 # Install the dependencies
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements_.txt
+# pip install --no-cache-dir -r requirements_.txt
+
+USER ray
