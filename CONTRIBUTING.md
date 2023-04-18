@@ -40,10 +40,10 @@ If you are proposing a feature:
 
 ## Get Started!
 
-Ready to contribute? Here's how to set up `determinant.ai` for local development.
+Ready to contribute? Here's how to set up `determinant` for local development.
 
-1. Download a copy of `determinant.ai` locally.
-2. Install `determinant.ai` using `poetry`:
+1. Download a copy of `determinant` locally.
+2. Install `determinant` using `poetry`:
 
     ```console
     $ poetry install
@@ -69,5 +69,5 @@ Before you submit a pull request, check that it meets these guidelines:
 
 ## Code of Conduct
 
-Please note that the `determinant.ai` project is released with a
+Please note that the `determinant` project is released with a
 Code of Conduct. By contributing to this project you agree to abide by its terms.
