@@ -12,10 +12,9 @@ from slack_bolt.async_app import AsyncApp
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           VisionEncoderDecoderModel, ViTImageProcessor)
 
-logging.basicConfig(level=logging.INFO)
+from logger import create_logger
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger = create_logger(__name__)
 
 
 fastapi_app = FastAPI()
