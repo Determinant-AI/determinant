@@ -202,9 +202,6 @@ from pydantic import BaseModel
 class LLMQuery(BaseModel):
     prompt: str
 import os
-os.environ["SLACK_BOT_TOKEN"] = "xoxb-4904090965495-4979773796723-VIedOl7iVHg3HrLkryfvTM38"
-os.environ["SLACK_SIGNING_SECRET"] = "69efb0b42e8ec9f7d04a8da6091b9261"
-
 
 @serve.deployment(route_prefix="/")
 @serve.ingress(fastapi_app)
