@@ -6,7 +6,7 @@ The chatbot will have the following features:
 
 * Run on Ray Serve and Kubernetes
 * User configured model composition for multi-modal chatbot apps.
-* Powreful prompting engine optimized for business use cases.
+* Powreful prompting engine optimized for collaborative and workspace use cases.
 * Integration with popular messaging and collaboration platforms like Slack, Teams.
 * Privacy and safety data processing
 * Compatible with popular enterprise data sources and tools
