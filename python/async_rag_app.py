@@ -54,7 +54,7 @@ from bs4 import BeautifulSoup
 import os
 import faiss
 
-@serve.deployment()#ray_actor_options={"num_gpus": 0.5})
+@serve.deployment(ray_actor_options={"num_gpus": 0.5})
 class DocumentVectorDB:
     def __init__(self, 
                  question_encoder_model: str = "facebook/dpr-question_encoder-single-nq-base",
@@ -127,7 +127,7 @@ class DocumentVectorDB:
                 documents.append(text_content)
         return documents
 
-@serve.deployment()#ray_actor_options={"num_gpus": 0.5})
+@serve.deployment(ray_actor_options={"num_gpus": 0.5})
 class RAGConversationBot:
     def __init__(self, 
                  db: DocumentVectorDB, 
