@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import List
 
 import slack
+from ingestor import Ingestor
 from logger import create_logger
 from slack_sdk.errors import SlackApiError
 
@@ -35,7 +36,7 @@ determinant_bot = 'B04UWAWQVQC'
 chatbot = 'B04UT1HM21H'
 
 
-class SlackIngestor:
+class SlackIngestor(Ingestor):
     def __init__(self, token: str, channel_name_list: List[str], maximum_messages_cnt: int, folder: str = None, bots: List[str] = None):
         self.client = slack.WebClient(token=token)
         self.channels = channel_name_list

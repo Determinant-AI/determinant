@@ -26,16 +26,16 @@ WORKDIR /app
 
 
 # Copy the requirements.txt file into the container
-COPY requirements_.txt .
+COPY requirements.txt .
 
 # Install the package 
 RUN pip install --upgrade pip
 
 # Update pip and setuptools to the latest version
 RUN pip install --upgrade pip setuptools
-RUN python python/setup.py install
+RUN python setup.py install
 
 # Install the dependencies
-# pip install --no-cache-dir -r requirements_.txt
+RUN pip install -r requirements.txt
 
 USER ray

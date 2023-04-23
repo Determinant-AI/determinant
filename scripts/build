@@ -21,3 +21,5 @@ docker tag "${image_name}:v${version}" "gcr.io/chatbot-alpha-380206/${image_name
 
 # push the image to GCR container registry
 docker push "gcr.io/chatbot-alpha-380206/${image_name}:v${version}"
+
+# ./scripts/build determinant 0.0.1  # build the image
