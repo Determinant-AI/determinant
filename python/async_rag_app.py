@@ -202,6 +202,8 @@ from pydantic import BaseModel
 class LLMQuery(BaseModel):
     prompt: str
 import os
+import time
+
 
 @serve.deployment(route_prefix="/")
 @serve.ingress(fastapi_app)
@@ -265,7 +267,8 @@ class SlackAgent:
 
     @fastapi_app.post("/test")
     async def handle_test(self, user_input: LLMQuery):
-        result = await self.conversation_bot.generate_text.remote(user_input.prompt)
+        result = await(await self.conversation_bot.generate_text.remote(
+            time.time(), user_input.prompt))
         return {'message': result}
 
 # model deployment
