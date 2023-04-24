@@ -2,15 +2,10 @@ import redis
 from redis.exceptions import RedisError
 
 import subprocess
-import time
-import logging
 from typing import Optional, List
+from logger import create_logger
 
-# Configure the logger.
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+logger = create_logger(__name__)
 
 
 class RedisManager:
@@ -56,7 +51,7 @@ class RedisManager:
         return self.redis_conn.rpush(list_key, *strings_to_insert) > 0
 
     def get_list_strings(self, list_key: str) -> Optional[List[str]]:
-        # If the specified key does not exist or if the key is associated with a data type 
+        # If the specified key does not exist or if the key is associated with a data type
         # other than a list, an empty list will be returned
         list_contents = self.redis_conn.lrange(list_key, 0, -1)
         return [item.decode() for item in list_contents]

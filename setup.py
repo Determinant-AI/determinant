@@ -24,3 +24,10 @@ setup(
 
 
 # python -m pip install determinant==0.1.0
+
+# model registry => MLflow API, huggingface
+
+# k-native app => kube ray (golang) => resource efficiency 
+#              => fork kube ray (operator pattern) => deploy
+
+# serve app => GPTcache 
