@@ -1,39 +1,38 @@
-import time
-from pydantic import BaseModel
-from fastapi import Body
-import faiss
-from bs4 import BeautifulSoup
-from transformers import DPRQuestionEncoder, DPRQuestionEncoderTokenizer
-from transformers import DPRContextEncoder, DPRContextEncoderTokenizer
-from typing import List
-import numpy as np
-import torch
-from transformers import pipeline
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers import VisionEncoderDecoderModel, ViTImageProcessor
-from transformers import StoppingCriteria, StoppingCriteriaList
-
-from fastapi import FastAPI, Request
-from ray import serve
-from slack_bolt.async_app import AsyncApp
-from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
-from slack_bolt.adapter.starlette.handler import SlackRequestHandler
-import requests
-from slack_sdk.signature import SignatureVerifier
-import ray
 import asyncio
-
 import logging
-# Configure the logger.
-
-from atlassian import Confluence
 import os
 import random
-
-import spacy
-from PIL import Image
+import time
 from io import BytesIO
+from typing import List
 
+import faiss
+import numpy as np
+import ray
+import requests
+import spacy
+import torch
+from atlassian import Confluence
+from bs4 import BeautifulSoup
+from fastapi import Body, FastAPI, Request
+from PIL import Image
+from pydantic import BaseModel
+from ray import serve
+from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
+from slack_bolt.adapter.starlette.handler import SlackRequestHandler
+from slack_bolt.async_app import AsyncApp
+from slack_sdk.signature import SignatureVerifier
+from transformers import (AutoModelForCausalLM, AutoTokenizer,
+                          DPRContextEncoder, DPRContextEncoderTokenizer,
+                          DPRQuestionEncoder, DPRQuestionEncoderTokenizer,
+                          StoppingCriteria, StoppingCriteriaList,
+                          VisionEncoderDecoderModel, ViTImageProcessor,
+                          pipeline)
+
+from logger import create_logger
+
+# Configure the logger.
+logger = create_logger(__name__)
 
 # Load a pre-trained SpaCy model for NER
 nlp = spacy.load('en_core_web_sm')
@@ -50,6 +49,7 @@ pages = confluence.get_all_pages_from_space(space_key)
 # Create a directory to store the downloaded pages
 if not os.path.exists('advendio_pages'):
     os.makedirs('advendio_pages')
+
 # Download each page
 for page in pages:
     page_id = page['id']
@@ -62,7 +62,7 @@ for page in pages:
             f.write(page_content)
     except:
         pass
-    print('Downloaded:', page_filename)
+    logger.info('Downloaded:', page_filename)
 
 
 @serve.deployment(num_replicas=1)  # ray_actor_options={"num_gpus": 0.5})
@@ -134,7 +134,6 @@ class DocumentVectorDB:
             with open(f, 'r', encoding='utf-8') as file:
                 html_content = file.read()
                 soup = BeautifulSoup(html_content, "lxml")
-
                 text_content = soup.get_text(separator=" ", strip=True)
                 documents.append(text_content)
         return documents
@@ -299,7 +298,7 @@ class SlackAgent:
         human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
         thread_ts = event.get("thread_ts", None) or event["ts"]
 
-        print("event:{}".format(event))
+        logger.info(f"event: {event}")
 
         if "files" in event:
             if "summarize" in event["text"].lower():
@@ -323,15 +322,15 @@ class SlackAgent:
         logger.info(body)
 
     async def handle_message_events(self, event, say):
-        if '<@U04UTNRPEM9>' in event['text']:
+        if '<@U04UTNRPEM9>' in event.get('text', ''):
             # will get handled in app_mention
             pass
         elif random.random() < 0.5:
             pass
         else:
-            print("message event:{}".format(event))
+            # TODO: write a event handler to produce events.
+            logger.info("message event:{}".format(event))
             await self.handle_app_mention(event, say)
-            logger.info(event)
 
     @fastapi_app.post("/slack/events")
     async def events_endpoint(self, req: Request) -> None:
@@ -355,7 +354,6 @@ class SlackAgent:
 
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
-
 image_captioning_bot = ImageCaptioningBot.bind()
 
 # ingress deployment
