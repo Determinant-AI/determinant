@@ -3,6 +3,8 @@ from transformers import pipeline
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import VisionEncoderDecoderModel, ViTImageProcessor
 from transformers import AutoModelForSeq2SeqLM
+from transformers import StoppingCriteria, StoppingCriteriaList
+from typing import Tuple
 
 from fastapi import FastAPI, Request
 from ray import serve
@@ -19,6 +21,16 @@ import logging
 
 from atlassian import Confluence
 import os
+import random
+
+import spacy
+from PIL import Image
+from io import BytesIO
+
+
+# Load a pre-trained SpaCy model for NER
+nlp = spacy.load('en_core_web_sm')
+
 
 # Set up Confluence API connection
 confluence = Confluence(
@@ -54,7 +66,7 @@ from bs4 import BeautifulSoup
 import os
 import faiss
 
-@serve.deployment(ray_actor_options={"num_gpus": 0.5})
+@serve.deployment(num_replicas=1)#ray_actor_options={"num_gpus": 0.5})
 class DocumentVectorDB:
     def __init__(self, 
                  question_encoder_model: str = "facebook/dpr-question_encoder-single-nq-base",
@@ -127,32 +139,87 @@ class DocumentVectorDB:
                 documents.append(text_content)
         return documents
 
-@serve.deployment(ray_actor_options={"num_gpus": 0.5})
-class RAGConversationBot:
+
+class StopOnTokens(StoppingCriteria):
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs) -> bool:
+        stop_ids = [50278, 50279, 50277, 1, 0]
+        for stop_id in stop_ids:
+            if input_ids[0][-1] == stop_id:
+                return True
+        return False
+
+
+@serve.deployment(num_replicas=1)#ray_actor_options={"num_gpus": 0.5})
+class RAGConversationBot(object):
     def __init__(self, 
                  db: DocumentVectorDB, 
-                 model: str = "databricks/dolly-v2-3b"):
-        self.model = model
+                 model_name: str = "StabilityAI/stablelm-tuned-alpha-7b"):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.db = db
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name).to(self.device)
 
-    async def prompt(self, input: str) ->str:
-        context_ref = await self.db.query_documents.remote(input)
-        context = await context_ref
-        assert isinstance(context, str)
-        return "{} \n context: {}\n output:".format(input, context)
-         
-    # Change this method to be an async function
-    async def generate_text(self, thread_ts, input_text: str) -> str:
-        generator = pipeline(model=self.model, torch_dtype=torch.bfloat16, trust_remote_code=True, device_map="auto")
+    def to_retrieve(self, s: str) -> bool:
+        # Perform NER on user input
+        doc = nlp(s)
+        entities = [ent.label_ for ent in doc.ents]
+
+        # Determine if retrieval is needed
+        if 'ORG' in entities:
+            return True
+        else:
+            return False
+
+    async def prompt(self, input: str) -> str:
+        if self.to_retrieve(input):
+            context_ref = await self.db.query_documents.remote(input)
+            context = await context_ref
+            assert isinstance(context, str)
+            user_input = f"Answer this question with context:{input} \n Context: {context}"
+        else:
+            context = ""
+            user_input = f"Answer this question:{input}"
+
+        system_prompt = """
+        <|SYSTEM|># StableLM Tuned (Alpha version)
+        - StableLM is a helpful and harmless open-source AI language model developed by StabilityAI.
+        - StableLM is excited to be able to help the user, but will refuse to do anything that could be considered harmful to the user.
+        - StableLM is more than just an information source, StableLM is also able to write poetry, short stories, and make jokes.
+        - StableLM will refuse to participate in anything that could harm a human.
+        """
+        result_prompt = f"{system_prompt}<|USER|>{user_input}#end<|ASSISTANT|>"
+        return result_prompt
+    
+    def remove_prefix_until_tag(self, s: str, tag="#end"):
+        # Find the index of the tag in the string
+        tag_index = s.find(tag)
+        if tag_index != -1:
+            # Calculate the end index of the tag
+            end_index = tag_index + len(tag)
+            # Slice the string starting from the end index of the tag
+            return s[end_index:]
+        return s  # Return the original string if the tag is not found
+    
+    async def generate_text(self, thread_ts, input_text: str):
         prompt_text = await self.prompt(input_text)
         assert isinstance(prompt_text, str)
-        return generator(prompt_text)[0]
+        inputs = self.tokenizer(prompt_text, return_tensors="pt")
+        tokens = self.model.generate(
+            **inputs,
+            max_new_tokens=64,
+            temperature=0.8,
+            do_sample=True,
+            stopping_criteria=StoppingCriteriaList([StopOnTokens()])
+        )
+        response = self.tokenizer.decode(tokens[0], skip_special_tokens=True)
+        response = self.remove_prefix_until_tag(response)
+        return response
 
     async def __call__(self, http_request: Request) -> str:
         input_text: str = await http_request.json()
         return await self.generate_text(input_text)
 
-@serve.deployment()
+@serve.deployment(num_replicas=1)
 class ImageCaptioningBot:
     def __init__(self):
         self.model = VisionEncoderDecoderModel.from_pretrained(
@@ -205,7 +272,7 @@ import os
 import time
 
 
-@serve.deployment(route_prefix="/")
+@serve.deployment(route_prefix="/", num_replicas=1)
 @serve.ingress(fastapi_app)
 class SlackAgent:
     def __init__(self, conversation_bot, image_captioning_bot):  # , summarization_bot):
@@ -221,6 +288,8 @@ class SlackAgent:
         self.slack_app.event("app_mention")(self.handle_app_mention)
         self.slack_app.event("file_shared")(self.handle_file_shared_events)
         self.slack_app.event("message")(self.handle_message_events)
+        self.slack_app.event("user_change")(self.handle_user_change_events)
+        self.slack_app.event("file_public")(self.handle_file_public_events)
 
     async def handle_app_mention(self, event, say):
         human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
@@ -243,9 +312,17 @@ class SlackAgent:
     async def handle_file_shared_events(self, event, logger):
         logger.info(event)
 
+    async def handle_user_change_events(body, logger):
+        logger.info(body)
+
+    async def handle_file_public_events(body, logger):
+        logger.info(body)
+
     async def handle_message_events(self, event, say):
         if '<@U04UTNRPEM9>' in event['text']:
             # will get handled in app_mention
+            pass
+        elif random.random() < 0.5:
             pass
         else:
             print("message event:{}".format(event))
@@ -273,9 +350,18 @@ class SlackAgent:
 
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
+
 image_captioning_bot = ImageCaptioningBot.bind()
 
 # ingress deployment
 slack_agent_deployment = SlackAgent.bind(rag_bot, image_captioning_bot)
+# serve.run(slack_agent_deployment)
+
+# response = requests.post("http://127.0.0.1:3000/test", json={"prompt": "what is an ad event in advendio"})
+# # Print the response status code and JSON response body
+# print(response.status_code)
+# print(response.json())
+
+
 
 #serve run async_rag_app:slack_agent_deployment -p 3000
