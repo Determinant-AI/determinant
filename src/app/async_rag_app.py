@@ -1,10 +1,17 @@
+import time
+from pydantic import BaseModel
+from fastapi import Body
+import faiss
+from bs4 import BeautifulSoup
+from transformers import DPRQuestionEncoder, DPRQuestionEncoderTokenizer
+from transformers import DPRContextEncoder, DPRContextEncoderTokenizer
+from typing import List
+import numpy as np
 import torch
 from transformers import pipeline
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import VisionEncoderDecoderModel, ViTImageProcessor
-from transformers import AutoModelForSeq2SeqLM
 from transformers import StoppingCriteria, StoppingCriteriaList
-from typing import Tuple
 
 from fastapi import FastAPI, Request
 from ray import serve
@@ -34,7 +41,7 @@ nlp = spacy.load('en_core_web_sm')
 
 # Set up Confluence API connection
 confluence = Confluence(
-url='https://advendio.atlassian.net',
+    url='https://advendio.atlassian.net',
 )
 
 space_key = "SO"
@@ -48,7 +55,8 @@ for page in pages:
     page_id = page['id']
     page_title = page['title']
     page_filename = page_title.replace(' ', '_') + '.html'
-    page_content = confluence.get_page_by_id(page_id, expand='body.storage')['body']['storage']['value']
+    page_content = confluence.get_page_by_id(page_id, expand='body.storage')[
+        'body']['storage']['value']
     try:
         with open('advendio_pages/' + page_filename, 'w') as f:
             f.write(page_content)
@@ -56,19 +64,10 @@ for page in pages:
         pass
     print('Downloaded:', page_filename)
 
-import numpy as np
 
-import torch
-from typing import List
-from transformers import DPRContextEncoder, DPRContextEncoderTokenizer
-from transformers import DPRQuestionEncoder, DPRQuestionEncoderTokenizer
-from bs4 import BeautifulSoup
-import os
-import faiss
-
-@serve.deployment(num_replicas=1)#ray_actor_options={"num_gpus": 0.5})
+@serve.deployment(num_replicas=1)  # ray_actor_options={"num_gpus": 0.5})
 class DocumentVectorDB:
-    def __init__(self, 
+    def __init__(self,
                  question_encoder_model: str = "facebook/dpr-question_encoder-single-nq-base",
                  context_encoder: str = "facebook/dpr-ctx_encoder-single-nq-base"
                  ):
@@ -85,19 +84,20 @@ class DocumentVectorDB:
             context_encoder)
         count = self.index_documents(self.documents)
         print("document count:{}".format(count))
-      
+
     def index_documents(self, documents: List[str]) -> int:
         # Encode the documents
         encoded_documents = self.context_tokenizer(
-            self.documents, 
-            return_tensors="pt", 
-            padding=True, 
-            truncation=True, 
+            self.documents,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
             max_length=self.token_limit)
-        document_embeddings = self.context_encoder(**encoded_documents).pooler_output
+        document_embeddings = self.context_encoder(
+            **encoded_documents).pooler_output
 
         document_embeddings = document_embeddings.detach().numpy()
-        document_embeddings=np.ascontiguousarray(document_embeddings)
+        document_embeddings = np.ascontiguousarray(document_embeddings)
         # Create Faiss Index
         vector_dimension = document_embeddings.shape[1]
         print("vector dimension:{}".format(vector_dimension))
@@ -149,15 +149,17 @@ class StopOnTokens(StoppingCriteria):
         return False
 
 
-@serve.deployment(num_replicas=1)#ray_actor_options={"num_gpus": 0.5})
+@serve.deployment(num_replicas=1)  # ray_actor_options={"num_gpus": 0.5})
 class RAGConversationBot(object):
-    def __init__(self, 
-                 db: DocumentVectorDB, 
+    def __init__(self,
+                 db: DocumentVectorDB,
                  model_name: str = "StabilityAI/stablelm-tuned-alpha-7b"):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu")
         self.db = db
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name).to(self.device)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name).to(self.device)
 
     def to_retrieve(self, s: str) -> bool:
         # Perform NER on user input
@@ -189,7 +191,7 @@ class RAGConversationBot(object):
         """
         result_prompt = f"{system_prompt}<|USER|>{user_input}#end<|ASSISTANT|>"
         return result_prompt
-    
+
     def remove_prefix_until_tag(self, s: str, tag="#end"):
         # Find the index of the tag in the string
         tag_index = s.find(tag)
@@ -199,7 +201,7 @@ class RAGConversationBot(object):
             # Slice the string starting from the end index of the tag
             return s[end_index:]
         return s  # Return the original string if the tag is not found
-    
+
     async def generate_text(self, thread_ts, input_text: str):
         prompt_text = await self.prompt(input_text)
         assert isinstance(prompt_text, str)
@@ -219,6 +221,7 @@ class RAGConversationBot(object):
         input_text: str = await http_request.json()
         return await self.generate_text(input_text)
 
+
 @serve.deployment(num_replicas=1)
 class ImageCaptioningBot:
     def __init__(self):
@@ -232,7 +235,8 @@ class ImageCaptioningBot:
             "nlpconnect/vit-gpt2-image-captioning"
         )
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
 
         # self.image_to_text = pipeline("image-to-text", model="nlpconnect/vit-gpt2-image-captioning")
@@ -258,24 +262,24 @@ class ImageCaptioningBot:
 
         output_ids = self.model.generate(pixel_values, **gen_kwargs)
 
-        preds = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+        preds = self.tokenizer.batch_decode(
+            output_ids, skip_special_tokens=True)
         preds = [pred.strip() for pred in preds]
         return preds[0]
 
+
 fastapi_app = FastAPI()
-from fastapi import Body
-from pydantic import BaseModel
+
 
 class LLMQuery(BaseModel):
     prompt: str
-import os
-import time
 
 
 @serve.deployment(route_prefix="/", num_replicas=1)
 @serve.ingress(fastapi_app)
 class SlackAgent:
-    def __init__(self, conversation_bot, image_captioning_bot):  # , summarization_bot):
+    # , summarization_bot):
+    def __init__(self, conversation_bot, image_captioning_bot):
         self.conversation_bot = conversation_bot
         self.caption_bot = image_captioning_bot
         # self.summarization_bot = summarization_bot
@@ -348,6 +352,7 @@ class SlackAgent:
             time.time(), user_input.prompt))
         return {'message': result}
 
+
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
 
@@ -363,5 +368,4 @@ slack_agent_deployment = SlackAgent.bind(rag_bot, image_captioning_bot)
 # print(response.json())
 
 
-
-#serve run async_rag_app:slack_agent_deployment -p 3000
+# serve run async_rag_app:slack_agent_deployment -p 3000
