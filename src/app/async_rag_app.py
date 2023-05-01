@@ -293,11 +293,19 @@ class SlackAgent:
         self.slack_app.event("message")(self.handle_message_events)
         self.slack_app.event("user_change")(self.handle_user_change_events)
         self.slack_app.event("file_public")(self.handle_file_public_events)
+        self.slack_app.event("reaction_added")(
+            self.handle_reaction_added_events)
+
+    async def handle_reaction_added_events(self, event, say):
+        # TODO: log events with feedback label
+        logger.info(f"event: {event}")
+        say(f"reaction added: {event['reaction']}")
 
     async def handle_app_mention(self, event, say):
         human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
         thread_ts = event.get("thread_ts", None) or event["ts"]
 
+        # TODO: log events with task label
         logger.info(f"event: {event}")
 
         if "files" in event:
