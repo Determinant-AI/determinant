@@ -40,19 +40,19 @@ class SlackAgent:
         await self.app_handler.start_async()
     
     @app.event("app_mention")
-    async def event_test(event, client, say):
+    async def event_test(self, event, say):
         logger.info(event)
         text = event["text"]
         await say(f"you mentioned me, you said {text}")
 
     @app.event("message")
-    async def handle_message_events(event, say):
+    async def handle_message_events(self, event, say):
         logger.info(event)
         text = event["text"]
         await say(f"What's up? you said {text}")
 
     @app.event("file_shared")
-    async def handle_file_shared_events(event, logger):
+    async def handle_file_shared_events(self, event, logger):
         logger.info(event)
 
 

@@ -11,7 +11,6 @@ import spacy
 import torch
 from atlassian import Confluence
 from bs4 import BeautifulSoup
-from fastapi import Body, FastAPI, Request
 from PIL import Image
 from pydantic import BaseModel
 from ray import serve
@@ -281,13 +280,13 @@ class SlackAgent:
         await self.app_handler.start_async()
 
     @app.event("reaction_added")
-    async def handle_reaction_added_events(event, say):
+    async def handle_reaction_added_events(self, event, say):
         # TODO: log events with feedback label
         logger.info(f"event: {event}")
         say(f"reaction added: {event['reaction']}")
 
     @app.event("app_mention")
-    async def handle_app_mention(event, say):
+    async def handle_app_mention(self, event, say):
         human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
         thread_ts = event.get("thread_ts", None) or event["ts"]
 
@@ -307,19 +306,19 @@ class SlackAgent:
         await say(await response_ref, thread_ts=thread_ts)
 
     @app.event("file_shared")
-    async def handle_file_shared_events(event):
+    async def handle_file_shared_events(self, event):
         logger.info(event)
 
     @app.event("user_change")
-    async def handle_user_change_events(body):
+    async def handle_user_change_events(self, body):
         logger.info(body)
 
     @app.event("file_public")
-    async def handle_file_public_events(body):
+    async def handle_file_public_events(self, body):
         logger.info(body)
 
     @app.event("message")
-    async def handle_message_events(event, say):
+    async def handle_message_events(self, event, say):
         if '<@U04UTNRPEM9>' in event.get('text', ''):
             # will get handled in app_mention
             pass
