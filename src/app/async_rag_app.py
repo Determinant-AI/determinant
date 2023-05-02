@@ -1,8 +1,5 @@
-import asyncio
-import logging
 import os
 import random
-import time
 from io import BytesIO
 from typing import List
 
@@ -18,8 +15,7 @@ from fastapi import Body, FastAPI, Request
 from PIL import Image
 from pydantic import BaseModel
 from ray import serve
-from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
-from slack_bolt.adapter.starlette.handler import SlackRequestHandler
+from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 from slack_sdk.signature import SignatureVerifier
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
@@ -62,7 +58,7 @@ for page in pages:
             f.write(page_content)
     except:
         pass
-    logger.info('Downloaded:', page_filename)
+    logger.info('Downloaded: %s', page_filename)
 
 
 @serve.deployment(num_replicas=1)  # ray_actor_options={"num_gpus": 0.5})
@@ -110,7 +106,6 @@ class DocumentVectorDB:
         """
         store some whre
         """
-        pass
 
     def encode_questions(self, query: str) -> List[torch.Tensor]:
         encoded_query = self.question_tokenizer(query, return_tensors="pt")
@@ -266,99 +261,76 @@ class ImageCaptioningBot:
         preds = [pred.strip() for pred in preds]
         return preds[0]
 
-
-fastapi_app = FastAPI()
-
-
 class LLMQuery(BaseModel):
     prompt: str
 
+app = AsyncApp(
+            token=os.environ["SLACK_BOT_TOKEN"],
+            signing_secret=os.environ["SLACK_SIGNING_SECRET"],
+            request_verification_enabled=True,
+        )
 
 @serve.deployment(route_prefix="/", num_replicas=1)
-@serve.ingress(fastapi_app)
 class SlackAgent:
     # , summarization_bot):
-    def __init__(self, conversation_bot, image_captioning_bot):
+    async def __init__(self, conversation_bot, image_captioning_bot):
         self.conversation_bot = conversation_bot
         self.caption_bot = image_captioning_bot
         # self.summarization_bot = summarization_bot
-        self.slack_app = AsyncApp(
-            token=os.environ["SLACK_BOT_TOKEN"],
-            signing_secret=os.environ["SLACK_SIGNING_SECRET"],
-            request_verification_enabled=False,
-        )
-        self.app_handler = AsyncSlackRequestHandler(self.slack_app)
-        self.slack_app.event("app_mention")(self.handle_app_mention)
-        self.slack_app.event("file_shared")(self.handle_file_shared_events)
-        self.slack_app.event("message")(self.handle_message_events)
-        self.slack_app.event("user_change")(self.handle_user_change_events)
-        self.slack_app.event("file_public")(self.handle_file_public_events)
-        self.slack_app.event("reaction_added")(
-            self.handle_reaction_added_events)
+        self.register()
+        self.app_handler = AsyncSocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
+        await self.app_handler.start_async()
 
-    async def handle_reaction_added_events(self, event, say):
-        # TODO: log events with feedback label
-        logger.info(f"event: {event}")
-        say(f"reaction added: {event['reaction']}")
+    def register(self):
+        @app.event("reaction_added")
+        async def handle_reaction_added_events(event, say):
+            # TODO: log events with feedback label
+            logger.info(f"event: {event}")
+            say(f"reaction added: {event['reaction']}")
 
-    async def handle_app_mention(self, event, say):
-        human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
-        thread_ts = event.get("thread_ts", None) or event["ts"]
+        @app.event("app_mention")
+        async def handle_app_mention(event, say):
+            human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
+            thread_ts = event.get("thread_ts", None) or event["ts"]
 
-        # TODO: log events with task label
-        logger.info(f"event: {event}")
+            # TODO: log events with task label
+            logger.info(f"event: {event}")
 
-        if "files" in event:
-            if "summarize" in event["text"].lower():
-                response_ref = await self.caption_bot.caption_image.remote(
-                    event["files"][0]["url_private"]
+            if "files" in event:
+                if "summarize" in event["text"].lower():
+                    response_ref = await self.caption_bot.caption_image.remote(
+                        event["files"][0]["url_private"]
+                    )
+            else:
+                response_ref = await self.conversation_bot.generate_text.remote(
+                    thread_ts, human_text
                 )
-        else:
-            response_ref = await self.conversation_bot.generate_text.remote(
-                thread_ts, human_text
-            )
 
-        await say(await response_ref, thread_ts=thread_ts)
+            await say(await response_ref, thread_ts=thread_ts)
 
-    async def handle_file_shared_events(self, event, logger):
-        logger.info(event)
+        @app.event("file_shared")
+        async def handle_file_shared_events(event):
+            logger.info(event)
 
-    async def handle_user_change_events(body, logger):
-        logger.info(body)
+        @app.event("user_change")
+        async def handle_user_change_events(body):
+            logger.info(body)
 
-    async def handle_file_public_events(body, logger):
-        logger.info(body)
+        @app.event("file_public")
+        async def handle_file_public_events(body):
+            logger.info(body)
 
-    async def handle_message_events(self, event, say):
-        if '<@U04UTNRPEM9>' in event.get('text', ''):
-            # will get handled in app_mention
-            pass
-        elif random.random() < 0.5:
-            pass
-        else:
-            # TODO: write a event handler to produce events.
-            logger.info("message event:{}".format(event))
-            await self.handle_app_mention(event, say)
-
-    @fastapi_app.post("/slack/events")
-    async def events_endpoint(self, req: Request) -> None:
-        resp = await self.app_handler.handle(req)
-        return resp
-
-    @fastapi_app.post("/slack/interactions")
-    async def interactions_endpoint(self, req: Request) -> None:
-        return await self.app_handler.handle(req)
-
-    @fastapi_app.get("/hello")
-    def say_hello(self, name: str):
-        return f"Hello {name}!"
-
-    @fastapi_app.post("/test")
-    async def handle_test(self, user_input: LLMQuery):
-        result = await(await self.conversation_bot.generate_text.remote(
-            time.time(), user_input.prompt))
-        return {'message': result}
-
+        @app.event("message")
+        async def handle_message_events(event, say):
+            if '<@U04UTNRPEM9>' in event.get('text', ''):
+                # will get handled in app_mention
+                pass
+            elif random.random() < 0.5:
+                pass
+            else:
+                # TODO: write a event handler to produce events.
+                logger.info("message event:{}".format(event))
+                await handle_app_mention(event, say)
 
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
@@ -374,4 +346,4 @@ slack_agent_deployment = SlackAgent.bind(rag_bot, image_captioning_bot)
 # print(response.json())
 
 
-# serve run async_rag_app:slack_agent_deployment -p 3000
+# serve run async_rag_app:slack_agent_deployment
