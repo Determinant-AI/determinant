@@ -330,7 +330,7 @@ class SlackAgent:
             else:
                 # TODO: write a event handler to produce events.
                 logger.info("message event:{}".format(event))
-                await self.handle_app_mention(event, say)
+                await handle_app_mention(event, say)
 
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
