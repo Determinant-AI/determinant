@@ -58,7 +58,7 @@ for page in pages:
             f.write(page_content)
     except:
         pass
-    logger.info('Downloaded:', page_filename)
+    logger.info('Downloaded: %s', page_filename)
 
 
 @serve.deployment(num_replicas=1)  # ray_actor_options={"num_gpus": 0.5})
@@ -280,55 +280,55 @@ class SlackAgent:
         self.app_handler = AsyncSocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
         await self.app_handler.start_async()
 
-    @app.event("reaction_added")
-    async def handle_reaction_added_events(self, event, say):
-        # TODO: log events with feedback label
-        logger.info(f"event: {event}")
-        say(f"reaction added: {event['reaction']}")
+        @app.event("reaction_added")
+        async def handle_reaction_added_events(event, say):
+            # TODO: log events with feedback label
+            logger.info(f"event: {event}")
+            say(f"reaction added: {event['reaction']}")
 
-    @app.event("app_mention")
-    async def handle_app_mention(self, event, say):
-        human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
-        thread_ts = event.get("thread_ts", None) or event["ts"]
+        @app.event("app_mention")
+        async def handle_app_mention(event, say):
+            human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
+            thread_ts = event.get("thread_ts", None) or event["ts"]
 
-        # TODO: log events with task label
-        logger.info(f"event: {event}")
+            # TODO: log events with task label
+            logger.info(f"event: {event}")
 
-        if "files" in event:
-            if "summarize" in event["text"].lower():
-                response_ref = await self.caption_bot.caption_image.remote(
-                    event["files"][0]["url_private"]
+            if "files" in event:
+                if "summarize" in event["text"].lower():
+                    response_ref = await self.caption_bot.caption_image.remote(
+                        event["files"][0]["url_private"]
+                    )
+            else:
+                response_ref = await self.conversation_bot.generate_text.remote(
+                    thread_ts, human_text
                 )
-        else:
-            response_ref = await self.conversation_bot.generate_text.remote(
-                thread_ts, human_text
-            )
 
-        await say(await response_ref, thread_ts=thread_ts)
+            await say(await response_ref, thread_ts=thread_ts)
 
-    @app.event("file_shared")
-    async def handle_file_shared_events(self, event):
-        logger.info(event)
+        @app.event("file_shared")
+        async def handle_file_shared_events(event):
+            logger.info(event)
 
-    @app.event("user_change")
-    async def handle_user_change_events(self, body):
-        logger.info(body)
+        @app.event("user_change")
+        async def handle_user_change_events(body):
+            logger.info(body)
 
-    @app.event("file_public")
-    async def handle_file_public_events(self, body):
-        logger.info(body)
+        @app.event("file_public")
+        async def handle_file_public_events(body):
+            logger.info(body)
 
-    @app.event("message")
-    async def handle_message_events(self, event, say):
-        if '<@U04UTNRPEM9>' in event.get('text', ''):
-            # will get handled in app_mention
-            pass
-        elif random.random() < 0.5:
-            pass
-        else:
-            # TODO: write a event handler to produce events.
-            logger.info("message event:{}".format(event))
-            await self.handle_app_mention(event, say)
+        @app.event("message")
+        async def handle_message_events(event, say):
+            if '<@U04UTNRPEM9>' in event.get('text', ''):
+                # will get handled in app_mention
+                pass
+            elif random.random() < 0.5:
+                pass
+            else:
+                # TODO: write a event handler to produce events.
+                logger.info("message event:{}".format(event))
+                await self.handle_app_mention(event, say)
 
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
