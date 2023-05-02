@@ -5,10 +5,17 @@ ingestor class:
 - slack emojis -> "expert validator"
 - slack threads between human -> "expert demonstration" -> exclude bot
 
+goal:
+- topic/task-oriented dialogue: => Prompt
+- human feedback data for training => Feedback 
+- human-human conv as expert demonstration => Expert
+- Catch up knowledge shared by Human => Knowledge
+
 storage class:
 - GCS or Gdrive?
 - gs://channel=slack_channel/date=2023-04-04/...
 """
+
 import json
 import os
 import shutil
@@ -60,6 +67,8 @@ class SlackIngestor(Ingestor):
     def normalize_message(self, message: str):
         """
         normalize the messages to make it digestable
+
+        TODO: address sensitive/privacy concerns.
 
         e.g. exclude bot's messages, images; process emojis
         """
