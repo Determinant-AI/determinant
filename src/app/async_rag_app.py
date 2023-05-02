@@ -277,9 +277,11 @@ class SlackAgent:
         self.conversation_bot = conversation_bot
         self.caption_bot = image_captioning_bot
         # self.summarization_bot = summarization_bot
+        self.register()
         self.app_handler = AsyncSocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
         await self.app_handler.start_async()
 
+    def register(self):
         @app.event("reaction_added")
         async def handle_reaction_added_events(event, say):
             # TODO: log events with feedback label
