@@ -11,6 +11,7 @@ import spacy
 import torch
 from atlassian import Confluence
 from bs4 import BeautifulSoup
+from fastapi import Body, FastAPI, Request
 from PIL import Image
 from pydantic import BaseModel
 from ray import serve
