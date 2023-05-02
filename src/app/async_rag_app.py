@@ -290,7 +290,10 @@ class SlackAgent:
 
         @app.event("app_mention")
         async def handle_app_mention(event, say):
-            human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
+            human_text = ''
+            if "text" in event {
+                human_text = event["text"] # .replace("<@U04MGTBFC7J>", "")
+            }
             thread_ts = event.get("thread_ts", None) or event["ts"]
 
             # TODO: log events with task label
