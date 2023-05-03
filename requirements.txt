@@ -211,7 +211,7 @@ wcwidth==0.2.6
 webcolors==1.12
 webencodings==0.5.1
 websocket-client==1.4.2
-Werkzeug==2.2.2
+Werkzeug ~> 2.2.3
 # Suggested by https://github.com/Determinant-AI/determinant/security/dependabot/2
 widgetsnbextension>=2.2.3
 xlrd==2.0.1
