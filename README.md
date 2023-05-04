@@ -1,3 +1,5 @@
+# [TEMP] This branch is to record Lun's fine tuning work.
+
 # Determinant
 This project aims to develop a self-hosted platform to help enterprise users effortless build backend for their chatbot apps using open-source models and components. The platform will be built on top of Kubernetes clusters, allowing for scalability and cost-efficiency. The open-source models and components used in this project will enable the platform to be easily customized and improved by the users.
 
