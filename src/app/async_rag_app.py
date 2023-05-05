@@ -10,7 +10,7 @@ import spacy
 import torch
 from atlassian import Confluence
 from bs4 import BeautifulSoup
-from fastapi import Body, FastAPI, Request
+from fastapi import Request
 from PIL import Image
 from pydantic import BaseModel
 from ray import serve
@@ -207,7 +207,7 @@ class RAGConversationBot(object):
         inputs = self.tokenizer(prompt_text, return_tensors="pt")
         tokens = self.model.generate(
             **inputs,
-            max_new_tokens=64,
+            max_new_tokens=200,
             temperature=0.8,
             do_sample=True,
             stopping_criteria=StoppingCriteriaList([StopOnTokens()])

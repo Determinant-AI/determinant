@@ -2,6 +2,7 @@ import re
 import uuid
 import spacy
 
+
 class PrivacyProcessor:
     """
     Redact, De-Identify, and Anonymize Personally Identifiable Information (PII) in text.
@@ -34,6 +35,8 @@ class PrivacyProcessor:
         url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
         credit_card_pattern = r'(?:\d{4}[- ]?){3}\d{4}'
         ssn_pattern = r'\b(\d{3}[- ]?\d{2}[- ]?\d{4})\b'
+
+        # TODO: Define regular expressions for PHI pattern
 
         # Redact PII using regex patterns based on configuration
         if config.get('email', True):
@@ -82,6 +85,4 @@ class PrivacyProcessor:
                 text = text.replace(ent.text, '[REDACTED ORG]')
             print(text)
 
-
         return text
-    
