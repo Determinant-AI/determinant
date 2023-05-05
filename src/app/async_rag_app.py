@@ -2,7 +2,7 @@ import os
 import random
 from io import BytesIO
 from typing import List
-
+import time
 import faiss
 import numpy as np
 import requests
@@ -109,7 +109,7 @@ class DocumentVectorDB:
 
     def insert_documents(self) -> List[str]:
         """
-        store some whre
+        store some where
         """
 
     def encode_questions(self, query: str) -> List[torch.Tensor]:
@@ -204,6 +204,7 @@ class RAGConversationBot(object):
     async def generate_text(self, thread_ts, input_text: str):
         prompt_text = await self.prompt(input_text)
         assert isinstance(prompt_text, str)
+        start = time.time()
         inputs = self.tokenizer(prompt_text, return_tensors="pt")
         tokens = self.model.generate(
             **inputs,
@@ -214,6 +215,8 @@ class RAGConversationBot(object):
         )
         response = self.tokenizer.decode(tokens[0], skip_special_tokens=True)
         response = self.remove_prefix_until_tag(response)
+        logger.info(
+            f"[Bot] generate response: {response}, latency: {time.time() - start}")
         return response
 
     async def __call__(self, http_request: Request) -> str:
@@ -294,18 +297,18 @@ class SlackAgent:
         @app.event("reaction_added")
         async def handle_reaction_added_events(event, say):
             # TODO: log events with feedback label
-            logger.info(f"event: {event}")
+            logger.info(f"[Reaction] Reaction event: {event}")
             say(f"reaction added: {event['reaction']}")
 
         @app.event("app_mention")
         async def handle_app_mention(event, say):
             human_text = ''
             if "text" in event:
-                human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
+                human_text = event["text"]
             thread_ts = event.get("thread_ts", None) or event["ts"]
 
             # TODO: log events with task label
-            logger.info(f"event: {event}")
+            logger.info(f"[Human] Handling the pinged event: {event}")
 
             if "files" in event:
                 if "summarize" in event["text"].lower():
@@ -340,7 +343,7 @@ class SlackAgent:
                 pass
             else:
                 # TODO: write a event handler to produce events.
-                logger.info(f"message event:{event}")
+                logger.info(f"[Human] Replying unpinged message: {event}")
                 await handle_app_mention(event, say)
 
 
