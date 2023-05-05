@@ -1,7 +1,9 @@
-from atlassian import Confluence
-from ingestor import Ingestor
-from bs4 import BeautifulSoup
 import os
+
+from atlassian import Confluence
+from bs4 import BeautifulSoup
+
+from ingestor import Ingestor
 
 
 class ConfluenceIngester(Ingestor):

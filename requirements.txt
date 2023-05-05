@@ -93,6 +93,7 @@ marshmallow-enum==1.5.1
 marshmallow-jsonschema==0.13.0
 matplotlib==3.6.3
 matplotlib-inline==0.1.6
+mypy-boto3-sqs==1.26
 mistune==2.0.4
 msgpack==1.0.4
 multidict==6.0.4
