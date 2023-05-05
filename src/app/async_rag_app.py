@@ -5,7 +5,6 @@ from typing import List
 
 import faiss
 import numpy as np
-import ray
 import requests
 import spacy
 import torch
@@ -17,7 +16,6 @@ from pydantic import BaseModel
 from ray import serve
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
-from slack_sdk.signature import SignatureVerifier
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           DPRContextEncoder, DPRContextEncoderTokenizer,
                           DPRQuestionEncoder, DPRQuestionEncoderTokenizer,
@@ -34,31 +32,38 @@ logger = create_logger(__name__)
 nlp = spacy.load('en_core_web_sm')
 
 
-# Set up Confluence API connection
-confluence = Confluence(
-    url='https://advendio.atlassian.net',
-)
+def download_confluence(url_str: str = 'https://advendio.atlassian.net', space_key="SO"):
+    # Set up Confluence API connection
+    confluence = Confluence(
+        url=url_str,
+    )
+    pages = confluence.get_all_pages_from_space(space_key)
 
-space_key = "SO"
-pages = confluence.get_all_pages_from_space(space_key)
+    # Create a directory to store the downloaded pages
+    if os.path.exists('advendio_pages'):
+        logger.info(
+            "Detected existing advendio_pages directory. Skipping download.")
+        return
 
-# Create a directory to store the downloaded pages
-if not os.path.exists('advendio_pages'):
     os.makedirs('advendio_pages')
 
-# Download each page
-for page in pages:
-    page_id = page['id']
-    page_title = page['title']
-    page_filename = page_title.replace(' ', '_') + '.html'
-    page_content = confluence.get_page_by_id(page_id, expand='body.storage')[
-        'body']['storage']['value']
-    try:
-        with open('advendio_pages/' + page_filename, 'w') as f:
-            f.write(page_content)
-    except:
-        pass
-    logger.info('Downloaded: %s', page_filename)
+    # Download each page
+    for page in pages:
+        page_id = page['id']
+        page_title = page['title']
+        page_filename = page_title.replace(' ', '_') + '.html'
+        page_content = confluence.get_page_by_id(page_id, expand='body.storage')[
+            'body']['storage']['value']
+        try:
+            with open(f'advendio_pages/{page_filename}', 'w') as f:
+                f.write(page_content)
+        except Exception as e:
+            logger.error(
+                f'Failed to download: {page_filename}, eerror: {str(e)}')
+        logger.info(f'Downloaded: {page_filename}')
+
+
+download_confluence()
 
 
 @serve.deployment(num_replicas=1)  # ray_actor_options={"num_gpus": 0.5})
@@ -261,14 +266,17 @@ class ImageCaptioningBot:
         preds = [pred.strip() for pred in preds]
         return preds[0]
 
+
 class LLMQuery(BaseModel):
     prompt: str
 
+
 app = AsyncApp(
-            token=os.environ["SLACK_BOT_TOKEN"],
-            signing_secret=os.environ["SLACK_SIGNING_SECRET"],
-            request_verification_enabled=True,
-        )
+    token=os.environ["SLACK_BOT_TOKEN"],
+    signing_secret=os.environ["SLACK_SIGNING_SECRET"],
+    request_verification_enabled=True,
+)
+
 
 @serve.deployment(route_prefix="/", num_replicas=1)
 class SlackAgent:
@@ -278,7 +286,8 @@ class SlackAgent:
         self.caption_bot = image_captioning_bot
         # self.summarization_bot = summarization_bot
         self.register()
-        self.app_handler = AsyncSocketModeHandler(app, os.environ["SLACK_APP_TOKEN"])
+        self.app_handler = AsyncSocketModeHandler(
+            app, os.environ["SLACK_APP_TOKEN"])
         await self.app_handler.start_async()
 
     def register(self):
@@ -291,9 +300,8 @@ class SlackAgent:
         @app.event("app_mention")
         async def handle_app_mention(event, say):
             human_text = ''
-            if "text" in event {
-                human_text = event["text"] # .replace("<@U04MGTBFC7J>", "")
-            }
+            if "text" in event:
+                human_text = event["text"]  # .replace("<@U04MGTBFC7J>", "")
             thread_ts = event.get("thread_ts", None) or event["ts"]
 
             # TODO: log events with task label
@@ -332,8 +340,9 @@ class SlackAgent:
                 pass
             else:
                 # TODO: write a event handler to produce events.
-                logger.info("message event:{}".format(event))
+                logger.info(f"message event:{event}")
                 await handle_app_mention(event, say)
+
 
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
@@ -347,6 +356,5 @@ slack_agent_deployment = SlackAgent.bind(rag_bot, image_captioning_bot)
 # # Print the response status code and JSON response body
 # print(response.status_code)
 # print(response.json())
-
 
 # serve run async_rag_app:slack_agent_deployment
