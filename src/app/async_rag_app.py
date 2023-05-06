@@ -1,3 +1,4 @@
+import json
 import os
 import random
 from io import BytesIO
@@ -152,18 +153,37 @@ class Event:
     def __init__(self):
         pass
 
-    def toStr(self) -> str:
-        import json
+    def toJson(self) -> str:
         # return the Json representation of the object
         return json.dumps(self.__dict__)
 
 
 class LLMAnswerContext(Event):
-    def __init__(self, input_text: str, prompt: str, output_text: str, model: str):
-        self.raw_text = input_text
-        self.prompt = prompt
-        self.response = output_text
-        self.model = model
+    def __init__(self, input_text: str = None, prompt: str = None, output_text: str = None, model: str = None, latency_sec: float = None, **kwargs):
+        self.raw_text = input_text if input_text else kwargs.get(
+            "raw_text", "")
+        self.prompt = prompt if prompt else kwargs.get("prompt", "")
+        self.output_text = output_text if output_text else kwargs.get(
+            "output_text", "")
+        self.model = model if model else kwargs.get("model", "")
+        self.latency_sec = latency_sec if latency_sec else kwargs.get(
+            "latency_sec", None)
+
+    def is_empty(self):
+        return self.raw_text == "" and self.prompt == "" and self.output_text == "" and self.model == "" and self.latency_sec == None
+
+    def serialize(self):
+        return self.toJson()
+
+    def _to_dict(self, json_str: str):
+        return json.loads(json_str)
+
+    def getResponse(self, json_str: str):
+        dic = self._to_dict(json_str)
+        return dic.get('response', "")
+
+    def deserialize(self, json_str: str):
+        return LLMAnswerContext(**json.loads(json_str))
 
 
 class Feedback(Event):
@@ -229,7 +249,7 @@ class RAGConversationBot(object):
             return s[end_index:]
         return s  # Return the original string if the tag is not found
 
-    async def generate_text(self, thread_ts, input_text: str) -> LLMAnswerContext:
+    async def generate_text(self, thread_ts, input_text: str) -> str:
         prompt_text = await self.prompt(input_text)
         start = time.time()
         inputs = self.tokenizer(prompt_text, return_tensors="pt")
@@ -242,16 +262,19 @@ class RAGConversationBot(object):
         )
         response = self.tokenizer.decode(tokens[0], skip_special_tokens=True)
         response = self.remove_prefix_until_tag(response)
-        logger.info(
-            f"[Bot] generate response: {response}, latency: {time.time() - start}")
 
-        conv = LLMAnswerContext(input_text, prompt_text, response, self.model)
-        return conv
+        latency = time.time() - start
+        logger.info(
+            f"[Bot] generate response: {response}, latency: {latency}")
+
+        conv = LLMAnswerContext(input_text, prompt_text,
+                                response, self.model, latency)
+        return conv.serialize()
 
     async def __call__(self, http_request: Request) -> str:
         input_text: str = await http_request.json()
         conv = await self.generate_text(input_text)
-        return conv.response
+        return conv
 
 
 @serve.deployment(num_replicas=1)
@@ -322,15 +345,15 @@ class SlackAgent:
         self.app_handler = AsyncSocketModeHandler(
             app, os.environ["SLACK_APP_TOKEN"])
         self.event_handler = event_handler
-        self.answerContext: LLMAnswerContext = None
+        self.answerContext = LLMAnswerContext()
         await self.app_handler.start_async()
 
     def register(self):
         @app.event("reaction_added")
         async def handle_reaction_added_events(event, say) -> None:
             logger.info(f"[Reaction] Reaction event: {event}")
-            if not self.answerContext or 'client_msg_id' in event:
-                await say(f"detected a reaction unrelated to bot: {event['reaction']}")
+            if self.answerContext.is_empty() or 'client_msg_id' in event:
+                await say(f"detected a reaction: {event['reaction']} unrelated to bot's last message")
                 logger.info(f"[Human-Human Reaction]: {event['reaction']}")
                 return
 
@@ -343,7 +366,7 @@ class SlackAgent:
                 await say("Thank you for your positive feedback!")
                 feedback.is_positive = True
 
-            logger.info(f"[Feedback]: {feedback.toStr()}")
+            logger.info(f"[Feedback]: {feedback.toJson()}")
 
         @app.event("app_mention")
         async def handle_app_mention(event, say):
@@ -363,8 +386,8 @@ class SlackAgent:
                 conv_ref = await self.conversation_bot.generate_text.remote(
                     thread_ts, human_text
                 )
-                self.answerContext = await conv_ref
-                response_ref = await conv_ref.response
+                response_ref = self.answerContext.getResponse(await conv_ref)
+                self.answerContext = self.answerContext.deserialize(await conv_ref)
 
             logger.info("Waiting for response from the bot: {response_ref}")
             response = await response_ref
