@@ -204,6 +204,7 @@ class RAGConversationBot(object):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name).to(self.device)
+        self.model_name = model_name
 
     def to_retrieve(self, s: str) -> bool:
         # Perform NER on user input
@@ -265,7 +266,7 @@ class RAGConversationBot(object):
             f"[Bot] generate response: {response}, latency: {latency}")
 
         conv = LLMAnswerContext(input_text, prompt_text,
-                                response, self.model, latency)
+                                response, self.model_name, latency)
         return conv.toJson()
 
     async def __call__(self, http_request: Request) -> str:
