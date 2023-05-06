@@ -72,7 +72,6 @@ class DocumentVectorDB:
                  context_encoder: str = "facebook/dpr-ctx_encoder-single-nq-base"
                  ):
         self.token_limit = 512
-
         self.documents = self.format_documents()
         self.question_encoder = DPRQuestionEncoder.from_pretrained(
             question_encoder_model)
@@ -82,15 +81,12 @@ class DocumentVectorDB:
             context_encoder)
         self.context_tokenizer = DPRContextEncoderTokenizer.from_pretrained(
             context_encoder)
+
         self.count = self.index_documents()
         logger.debug(
             "DocumentVectorDB initialized, document count:{}".format(self.count))
 
     def index_documents(self) -> int:
-        if self.count > 0:
-            logger.info("Documents already indexed. Skipping.")
-            return self.count
-
         # Encode the documents
         encoded_documents = self.context_tokenizer(
             self.documents,
