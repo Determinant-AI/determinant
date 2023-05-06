@@ -282,14 +282,14 @@ app = AsyncApp(
 
 @serve.deployment(route_prefix="/", num_replicas=1)
 class SlackAgent:
-    async def __init__(self, conversation_bot, image_captioning_bot, event_handler: None):
+    async def __init__(self, conversation_bot, image_captioning_bot):
+        # TODO: add event handler to log events
         self.conversation_bot = conversation_bot
         self.caption_bot = image_captioning_bot
         # self.summarization_bot = summarization_bot
         self.register()
         self.app_handler = AsyncSocketModeHandler(
             app, os.environ["SLACK_APP_TOKEN"])
-        self.event_handler = event_handler
         await self.app_handler.start_async()
 
     def register(self):
@@ -306,8 +306,7 @@ class SlackAgent:
                 human_text = event["text"]
             thread_ts = event.get("thread_ts", None) or event["ts"]
 
-            # TODO: log events with task label
-            logger.info(f"[Human] Handling the pinged event: {event}")
+            logger.info(f"[Human Task] Handling the pinged event: {event}")
 
             if "files" in event:
                 if "summarize" in event["text"].lower():
@@ -320,7 +319,8 @@ class SlackAgent:
                 )
 
             response = await response_ref
-            logger.info("[Bot] Replying to pinged message: {response}")
+            logger.info(
+                "[Bot Response] Replying to pinged message: {response}")
 
             await say(response, thread_ts=thread_ts)
 
@@ -345,7 +345,8 @@ class SlackAgent:
                 pass
             else:
                 # TODO: write a event handler to produce events.
-                logger.info(f"[Human] Replying unpinged message: {event}")
+                logger.info(
+                    f"[Human] Replying unpinged message: {event}")
                 await handle_app_mention(event, say)
 
 
