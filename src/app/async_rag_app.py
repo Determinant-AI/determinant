@@ -22,10 +22,10 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           StoppingCriteria, StoppingCriteriaList,
                           VisionEncoderDecoderModel, ViTImageProcessor)
 
-from logger import create_logger
+from logger import create_logger, DEBUG
 
 # Configure the logger.
-logger = create_logger(__name__)
+logger = create_logger(__name__, log_level=DEBUG)
 
 # Load a pre-trained SpaCy model for NER
 nlp = spacy.load('en_core_web_sm')
@@ -82,10 +82,14 @@ class DocumentVectorDB:
             context_encoder)
         self.context_tokenizer = DPRContextEncoderTokenizer.from_pretrained(
             context_encoder)
-        count = self.index_documents()
-        print("document count:{}".format(count))
+        self.count = self.index_documents()
+        logger.debug("document count:{}".format(self.count))
 
     def index_documents(self) -> int:
+        if self.count > 0:
+            logger.info("Documents already indexed. Skipping.")
+            return self.count
+
         # Encode the documents
         encoded_documents = self.context_tokenizer(
             self.documents,
@@ -100,12 +104,10 @@ class DocumentVectorDB:
         document_embeddings = np.ascontiguousarray(document_embeddings)
         # Create Faiss Index
         vector_dimension = document_embeddings.shape[1]
-        print("vector dimension:{}".format(vector_dimension))
+        logger.debug("vector dimension:{}".format(vector_dimension))
         self.index = faiss.IndexFlatL2(vector_dimension)
         faiss.normalize_L2(document_embeddings)
         self.index.add(document_embeddings)
-
-        # TODO: store index and avoid reindexing
         return self.index.ntotal
 
     def insert_documents(self) -> List[str]:
@@ -125,7 +127,7 @@ class DocumentVectorDB:
         query_embedding = self.encode_questions(query)
         _, idx = self.index.search(query_embedding, 4)
         doc = self.documents[idx[0][0]]
-        print("query result: index={}, doc={}".format(idx[0][0], doc))
+        logger.debug("query result: index={}, doc={}".format(idx[0][0], doc))
         return doc
 
     def format_documents(self):
@@ -147,6 +149,34 @@ class StopOnTokens(StoppingCriteria):
             if input_ids[0][-1] == stop_id:
                 return True
         return False
+
+
+class Event:
+    def __init__(self):
+        pass
+
+    def toStr(self) -> str:
+        import json
+        # return the Json representation of the object
+        return json.dumps(self.__dict__)
+
+
+class LLMAnswerContext(Event):
+    def __init__(self, input_text: str, prompt: str, output_text: str, model: str):
+        self.raw_text = input_text
+        self.prompt = prompt
+        self.response = output_text
+        self.model = model
+
+
+class Feedback(Event):
+    def __init__(self, answer_context: LLMAnswerContext, reaction: str, is_positive: bool = None):
+        self.input_raw = answer_context.raw_text
+        self.input_prompt = answer_context.prompt
+        self.output_text = answer_context.response
+        self.model = answer_context.model
+        self.reaction = reaction
+        self.is_positive = is_positive
 
 
 @serve.deployment(num_replicas=1)  # ray_actor_options={"num_gpus": 0.5})
@@ -202,9 +232,8 @@ class RAGConversationBot(object):
             return s[end_index:]
         return s  # Return the original string if the tag is not found
 
-    async def generate_text(self, thread_ts, input_text: str):
+    async def generate_text(self, thread_ts, input_text: str) -> LLMAnswerContext:
         prompt_text = await self.prompt(input_text)
-        assert isinstance(prompt_text, str)
         start = time.time()
         inputs = self.tokenizer(prompt_text, return_tensors="pt")
         tokens = self.model.generate(
@@ -218,11 +247,14 @@ class RAGConversationBot(object):
         response = self.remove_prefix_until_tag(response)
         logger.info(
             f"[Bot] generate response: {response}, latency: {time.time() - start}")
-        return response
+
+        conv = LLMAnswerContext(input_text, prompt_text, response, self.model)
+        return conv
 
     async def __call__(self, http_request: Request) -> str:
         input_text: str = await http_request.json()
-        return await self.generate_text(input_text)
+        conv = await self.generate_text(input_text)
+        return conv.response
 
 
 @serve.deployment(num_replicas=1)
@@ -284,7 +316,7 @@ app = AsyncApp(
 
 @serve.deployment(route_prefix="/", num_replicas=1)
 class SlackAgent:
-    async def __init__(self, conversation_bot, image_captioning_bot):
+    async def __init__(self, conversation_bot, image_captioning_bot, event_handler: None):
         # TODO: add event handler to log events
         self.conversation_bot = conversation_bot
         self.caption_bot = image_captioning_bot
@@ -292,14 +324,29 @@ class SlackAgent:
         self.register()
         self.app_handler = AsyncSocketModeHandler(
             app, os.environ["SLACK_APP_TOKEN"])
+        self.event_handler = event_handler
+        self.answerContext: LLMAnswerContext = None
         await self.app_handler.start_async()
 
     def register(self):
         @app.event("reaction_added")
-        async def handle_reaction_added_events(event, say):
-            # TODO: log events with feedback label
+        async def handle_reaction_added_events(event, say) -> None:
             logger.info(f"[Reaction] Reaction event: {event}")
-            say(f"reaction added: {event['reaction']}")
+            if not self.answerContext or 'client_msg_id' in event:
+                await say(f"[Human-Human Reaction] reaction added: {event['reaction']}")
+                return
+
+            answer_context = self.answerContext.toStr()
+            feedback = Feedback(answer_context, event["reaction"])
+            if event["reaction"] in set("thumbsdown", "-1"):
+                # TODO: regenerate the answer or add self-criticism prompt
+                await say("You seemed to be unhappy with the answer.")
+                feedback.is_positive = False
+            elif event["reaction"] in set("thumbsup", "+1"):
+                await say("Thank you for your positive feedback!")
+                feedback.is_positive = True
+
+            logger.info(f"[Feedback]: {feedback.toStr()}")
 
         @app.event("app_mention")
         async def handle_app_mention(event, say):
@@ -316,13 +363,16 @@ class SlackAgent:
                         event["files"][0]["url_private"]
                     )
             else:
-                response_ref = await self.conversation_bot.generate_text.remote(
+                conv = await self.conversation_bot.generate_text.remote(
                     thread_ts, human_text
                 )
+                self.answerContext = conv
+                response_ref = conv.response
 
+            logger.debug("Waiting for response from the bot: {response_ref}")
             response = await response_ref
             logger.info(
-                "[Bot Response] Replying to pinged message: {response}")
+                f"[Bot Response] Replying to pinged message: {response}")
 
             await say(response, thread_ts=thread_ts)
 
@@ -342,6 +392,10 @@ class SlackAgent:
         async def handle_file_public_events(body):
             logger.info(body)
 
+        @app.event("group_left")
+        async def handle_group_left_events(body, logger):
+            logger.info(body)
+
         @app.event("message")
         async def handle_message_events(event, say):
             if '<@U04UTNRPEM9>' in event.get('text', ''):
@@ -356,12 +410,18 @@ class SlackAgent:
                 await handle_app_mention(event, say)
 
 
+class EventHandler:
+    pass
+
+
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
 image_captioning_bot = ImageCaptioningBot.bind()
+event_handler = EventHandler.bind()
 
 # ingress deployment
-slack_agent_deployment = SlackAgent.bind(rag_bot, image_captioning_bot)
+slack_agent_deployment = SlackAgent.bind(
+    rag_bot, image_captioning_bot, event_handler)
 # serve.run(slack_agent_deployment)
 
 # response = requests.post("http://127.0.0.1:3000/test", json={"prompt": "what is an ad event in advendio"})

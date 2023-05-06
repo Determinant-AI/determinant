@@ -20,8 +20,10 @@ ssh -i "my-key-pair.pem" ec2-user@ec2-18-237-192-233.us-west-2.compute.amazonaws
 ```
 
 ### 5. Develop on the remote instance:
+After you SSH to the machine, you can develop on the remote instance.
+
 a) Attach to the Ray serve running session to view the live logs:
-After you SSH to the machine, tmux to the Ray serve session by running
+tmux to the Ray serve session by running
 ```
 tmux attach
 ```
@@ -36,7 +38,9 @@ serve run async_rag_app:slack_agent_deployment
 
 ### 1. clone the git repo
 
-setup ssh key via https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent
+setup ssh key via [this link](https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh)
+
+```
 
 ### 2. create virtual env
 
@@ -60,6 +64,11 @@ cd src/app
 serve run async_rag_app:slack_agent_deployment
 ```
 
+## Connect your local VSCode to the remote VM
+Install the exention [Remote - SSH](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh) in your local VSCode. 
+
+Then follow the
+[doc](https://code.visualstudio.com/docs/remote/troubleshooting#_configuring-key-based-authentication)
 ## How does slack connection work?
 
 It's now using slack app [socket mode](https://api.slack.com/apis/connections/socket). We don't need to expose ports now. 
