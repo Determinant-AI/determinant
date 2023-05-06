@@ -172,9 +172,6 @@ class LLMAnswerContext(Event):
     def is_empty(self):
         return self.raw_text == "" and self.prompt == "" and self.output_text == "" and self.model == "" and self.latency_sec == None
 
-    def serialize(self):
-        return self.toJson()
-
     def _to_dict(self, json_str: str):
         return json.loads(json_str)
 
@@ -182,7 +179,7 @@ class LLMAnswerContext(Event):
         dic = self._to_dict(json_str)
         return dic.get('response', "")
 
-    def deserialize(self, json_str: str):
+    def loads(self, json_str: str):
         return LLMAnswerContext(**json.loads(json_str))
 
 
@@ -269,7 +266,7 @@ class RAGConversationBot(object):
 
         conv = LLMAnswerContext(input_text, prompt_text,
                                 response, self.model, latency)
-        return conv.serialize()
+        return conv.toJson()
 
     async def __call__(self, http_request: Request) -> str:
         input_text: str = await http_request.json()
