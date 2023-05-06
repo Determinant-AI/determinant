@@ -385,7 +385,7 @@ class SlackAgent:
                     thread_ts, human_text
                 )
                 response_ref = self.answerContext.getResponse(await conv_ref)
-                self.answerContext = self.answerContext.deserialize(await conv_ref)
+                self.answerContext = self.answerContext.loads(await conv_ref)
 
             logger.info("Waiting for response from the bot: {response_ref}")
             response = await response_ref
