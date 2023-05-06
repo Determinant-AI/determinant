@@ -83,7 +83,8 @@ class DocumentVectorDB:
         self.context_tokenizer = DPRContextEncoderTokenizer.from_pretrained(
             context_encoder)
         self.count = self.index_documents()
-        logger.debug("document count:{}".format(self.count))
+        logger.debug(
+            "DocumentVectorDB initialized, document count:{}".format(self.count))
 
     def index_documents(self) -> int:
         if self.count > 0:
@@ -410,8 +411,13 @@ class SlackAgent:
                 await handle_app_mention(event, say)
 
 
+@serve.deployment(num_replicas=1)
 class EventHandler:
-    pass
+    def __init__(self):
+        pass
+
+    def handle(self, event):
+        pass
 
 
 # model deployment
