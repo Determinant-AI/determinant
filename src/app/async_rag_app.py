@@ -20,8 +20,7 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           DPRContextEncoder, DPRContextEncoderTokenizer,
                           DPRQuestionEncoder, DPRQuestionEncoderTokenizer,
                           StoppingCriteria, StoppingCriteriaList,
-                          VisionEncoderDecoderModel, ViTImageProcessor,
-                          pipeline)
+                          VisionEncoderDecoderModel, ViTImageProcessor)
 
 from logger import create_logger
 
@@ -86,7 +85,7 @@ class DocumentVectorDB:
         count = self.index_documents(self.documents)
         print("document count:{}".format(count))
 
-    def index_documents(self, documents: List[str]) -> int:
+    def index_documents(self) -> int:
         # Encode the documents
         encoded_documents = self.context_tokenizer(
             self.documents,
@@ -283,14 +282,14 @@ app = AsyncApp(
 
 @serve.deployment(route_prefix="/", num_replicas=1)
 class SlackAgent:
-    # , summarization_bot):
-    async def __init__(self, conversation_bot, image_captioning_bot):
+    async def __init__(self, conversation_bot, image_captioning_bot, event_handler: None):
         self.conversation_bot = conversation_bot
         self.caption_bot = image_captioning_bot
         # self.summarization_bot = summarization_bot
         self.register()
         self.app_handler = AsyncSocketModeHandler(
             app, os.environ["SLACK_APP_TOKEN"])
+        self.event_handler = event_handler
         await self.app_handler.start_async()
 
     def register(self):
@@ -320,7 +319,10 @@ class SlackAgent:
                     thread_ts, human_text
                 )
 
-            await say(await response_ref, thread_ts=thread_ts)
+            response = await response_ref
+            logger.info("[Bot] Replying to pinged message: {response}")
+
+            await say(response, thread_ts=thread_ts)
 
         @app.event("file_shared")
         async def handle_file_shared_events(event):
