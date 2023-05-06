@@ -380,15 +380,14 @@ class SlackAgent:
                     response_ref = await self.caption_bot.caption_image.remote(
                         event["files"][0]["url_private"]
                     )
+                    response = await response_ref
             else:
                 conv_ref = await self.conversation_bot.generate_text.remote(
                     thread_ts, human_text
                 )
-                response_ref = self.answerContext.getResponse(await conv_ref)
+                response = self.answerContext.getResponse(await conv_ref)
                 self.answerContext = self.answerContext.loads(await conv_ref)
 
-            logger.info("Waiting for response from the bot: {response_ref}")
-            response = await response_ref
             logger.info(
                 f"[Bot Response] Replying to pinged message: {response}")
 
