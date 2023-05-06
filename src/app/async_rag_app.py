@@ -83,7 +83,7 @@ class DocumentVectorDB:
             context_encoder)
 
         self.count = self.index_documents()
-        logger.debug(
+        logger.info(
             "DocumentVectorDB initialized, document count:{}".format(self.count))
 
     def index_documents(self) -> int:
@@ -330,11 +330,11 @@ class SlackAgent:
         async def handle_reaction_added_events(event, say) -> None:
             logger.info(f"[Reaction] Reaction event: {event}")
             if not self.answerContext or 'client_msg_id' in event:
-                await say(f"[Human-Human Reaction] reaction added: {event['reaction']}")
+                await say(f"detected a reaction unrelated to bot: {event['reaction']}")
+                logger.info(f"[Human-Human Reaction]: {event['reaction']}")
                 return
 
-            answer_context = self.answerContext.toStr()
-            feedback = Feedback(answer_context, event["reaction"])
+            feedback = Feedback(self.answerContext, event["reaction"])
             if event["reaction"] in set("thumbsdown", "-1"):
                 # TODO: regenerate the answer or add self-criticism prompt
                 await say("You seemed to be unhappy with the answer.")
@@ -360,13 +360,13 @@ class SlackAgent:
                         event["files"][0]["url_private"]
                     )
             else:
-                conv = await self.conversation_bot.generate_text.remote(
+                conv_ref = await self.conversation_bot.generate_text.remote(
                     thread_ts, human_text
                 )
-                self.answerContext = conv
-                response_ref = conv.response
+                self.answerContext = await conv_ref
+                response_ref = await conv_ref.response
 
-            logger.debug("Waiting for response from the bot: {response_ref}")
+            logger.info("Waiting for response from the bot: {response_ref}")
             response = await response_ref
             logger.info(
                 f"[Bot Response] Replying to pinged message: {response}")
@@ -383,6 +383,10 @@ class SlackAgent:
 
         @app.event("pin_added")
         async def handle_pin_added_events(body, logger):
+            logger.info(body)
+
+        @app.event("app_home_opened")
+        async def handle_app_home_opened_events(body, logger):
             logger.info(body)
 
         @app.event("file_public")
