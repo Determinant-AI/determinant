@@ -14,3 +14,5 @@ The chatbot will have the following features:
 * Serverless architecture for scalability and cost-efficiency
 * Open-source models and components for easy customization and improvement.
 
+## Developers Guide
+Please reference the [DEVELOPMENT.md](DEVELOPMENT.md) for the detailed development guide.

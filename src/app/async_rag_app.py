@@ -82,7 +82,7 @@ class DocumentVectorDB:
             context_encoder)
         self.context_tokenizer = DPRContextEncoderTokenizer.from_pretrained(
             context_encoder)
-        count = self.index_documents(self.documents)
+        count = self.index_documents()
         print("document count:{}".format(count))
 
     def index_documents(self) -> int:
@@ -104,6 +104,8 @@ class DocumentVectorDB:
         self.index = faiss.IndexFlatL2(vector_dimension)
         faiss.normalize_L2(document_embeddings)
         self.index.add(document_embeddings)
+
+        # TODO: store index and avoid reindexing
         return self.index.ntotal
 
     def insert_documents(self) -> List[str]:
@@ -330,6 +332,10 @@ class SlackAgent:
 
         @app.event("user_change")
         async def handle_user_change_events(body):
+            logger.info(body)
+
+        @app.event("pin_added")
+        async def handle_pin_added_events(body, logger):
             logger.info(body)
 
         @app.event("file_public")
