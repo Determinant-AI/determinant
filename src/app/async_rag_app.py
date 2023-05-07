@@ -253,7 +253,7 @@ class RAGConversationBot(object):
             return s[end_index:]
         return s  # Return the original string if the tag is not found
 
-    async def generate_text(self, thread_ts, input_text: str) -> str:
+    async def generate_text(self, thread_ts: str, input_text: str) -> str:
         prompt_text = await self.prompt(input_text)
         start = time.time()
         inputs = self.tokenizer(prompt_text, return_tensors="pt")
@@ -272,14 +272,14 @@ class RAGConversationBot(object):
             f"[Bot] generate response: {response}, latency: {latency}")
 
         conv = LLMAnswerContext(input_text, prompt_text,
-                                response, self.model_name, thread_ts, latency)
+                                response, self.model_name, latency, thread_ts)
 
         logger.info(f"[Bot] conversation: {conv.toJson()}")
         return conv.toJson()
 
     async def __call__(self, http_request: Request) -> str:
         input_text: str = await http_request.json()
-        conv = await self.generate_text(input_text)
+        conv = await self.generate_text("", input_text)
         return conv
 
 
@@ -366,7 +366,7 @@ class SlackAgent:
             reaction = event['reaction']
             reaction_author = event['user']
             if self.answerContext.is_empty() or 'client_msg_id' in event:
-                await say(f"detected a reaction: {reaction} unrelated to bot's last message")
+                # Note: reaction to app's message (Claude, Determinant, etc.) won't have `client_msg_id`
                 logger.info(f"[Human-Human Reaction]: {reaction}")
                 return
 
@@ -397,9 +397,7 @@ class SlackAgent:
                 )
                 response = await response_ref
             else:
-                conv_ref = await self.conversation_bot.generate_text.remote(
-                    thread_ts, human_text
-                )
+                conv_ref = await self.conversation_bot.generate_text.remote(thread_ts, human_text)
                 conv = await conv_ref
                 response = self.answerContext.get_response(conv)
                 self.answerContext = self.answerContext.loads(conv)
