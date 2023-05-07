@@ -177,7 +177,7 @@ class LLMAnswerContext(Event):
         return json.loads(json_str)
 
     def get_response(self, json_str: str):
-        logger.info("get_response:{}".format(json_str))
+        logger.debug("get_response:{}".format(json_str))
         dic = self.to_dict(json_str)
         return dic.get('output_text', "error: no output_text")
 
@@ -360,11 +360,11 @@ class SlackAgent:
                 return
 
             feedback = Feedback(self.answerContext, event["reaction"])
-            if event["reaction"] in set("thumbsdown", "-1"):
-                # TODO: regenerate the answer or add self-criticism prompt
+            if event["reaction"] in set(["thumbsdown", "-1"]):
+                # TODO: revisit the answer or add self-criticism prompt
                 await say("You seemed to be unhappy with the answer.")
                 feedback.is_positive = False
-            elif event["reaction"] in set("thumbsup", "+1"):
+            elif event["reaction"] in set(["thumbsup", "+1"]):
                 await say("Thank you for your positive feedback!")
                 feedback.is_positive = True
 
