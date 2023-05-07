@@ -173,14 +173,15 @@ class LLMAnswerContext(Event):
         return self.raw_text == "" and self.prompt == "" and self.output_text == "" and self.model == "" and self.latency_sec == None
 
     def _to_dict(self, json_str: str):
+        json_str = json_str.replace('\n', '\\n').replace('#', '\\u0023')
         return json.loads(json_str)
 
-    def getResponse(self, json_str: str):
+    def get_response(self, json_str: str):
         dic = self._to_dict(json_str)
-        return dic.get('response', "")
+        return dic.get('response', "error: no response")
 
     def loads(self, json_str: str):
-        return LLMAnswerContext(**json.loads(json_str))
+        return LLMAnswerContext(**self._to_dict(json_str))
 
 
 class Feedback(Event):
@@ -267,6 +268,8 @@ class RAGConversationBot(object):
 
         conv = LLMAnswerContext(input_text, prompt_text,
                                 response, self.model_name, latency)
+
+        logger.info(f"[Bot] conversation: {conv.toJson}")
         return conv.toJson()
 
     async def __call__(self, http_request: Request) -> str:
@@ -375,18 +378,18 @@ class SlackAgent:
 
             logger.info(f"[Human Task] Handling the pinged event: {event}")
 
-            if "files" in event:
-                if "summarize" in event["text"].lower():
-                    response_ref = await self.caption_bot.caption_image.remote(
-                        event["files"][0]["url_private"]
-                    )
-                    response = await response_ref
+            if "files" in event and "summarize" in event["text"].lower():
+                response_ref = await self.caption_bot.caption_image.remote(
+                    event["files"][0]["url_private"]
+                )
+                response = await response_ref
             else:
                 conv_ref = await self.conversation_bot.generate_text.remote(
                     thread_ts, human_text
                 )
-                response = self.answerContext.getResponse(await conv_ref)
-                self.answerContext = self.answerContext.loads(await conv_ref)
+                conv = await conv_ref
+                response = self.answerContext.get_response(conv)
+                self.answerContext = self.answerContext.loads(conv)
 
             logger.info(
                 f"[Bot Response] Replying to pinged message: {response}")
@@ -426,8 +429,8 @@ class SlackAgent:
                 pass
             else:
                 # TODO: write a event handler to produce events.
-                logger.info(
-                    f"[Human] Replying unpinged message: {event}")
+                # logger.info(
+                #     f"[Human] Replying unpinged message: {event['text']}")
                 await handle_app_mention(event, say)
 
 
