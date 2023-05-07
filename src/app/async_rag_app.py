@@ -189,7 +189,7 @@ class Feedback(Event):
     def __init__(self, answer_context: LLMAnswerContext, reaction: str, is_positive: bool = None):
         self.input_raw = answer_context.raw_text
         self.input_prompt = answer_context.prompt
-        self.output_text = answer_context.response
+        self.output_text = answer_context.output_text
         self.model = answer_context.model
         self.reaction = reaction
         self.is_positive = is_positive
@@ -393,7 +393,7 @@ class SlackAgent:
                 self.answerContext = self.answerContext.loads(conv)
 
             logger.info(
-                f"[Bot Response] Replying to pinged message: {response}")
+                f"[Bot Response]: {response}")
 
             await say(response, thread_ts=thread_ts)
 
@@ -429,9 +429,6 @@ class SlackAgent:
             elif random.random() < 0.5:
                 pass
             else:
-                # TODO: write a event handler to produce events.
-                # logger.info(
-                #     f"[Human] Replying unpinged message: {event['text']}")
                 await handle_app_mention(event, say)
 
 
