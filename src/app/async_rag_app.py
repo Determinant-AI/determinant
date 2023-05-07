@@ -354,17 +354,23 @@ class SlackAgent:
         @app.event("reaction_added")
         async def handle_reaction_added_events(event, say) -> None:
             logger.info(f"[Reaction] Reaction event: {event}")
+
+            reaction = event['reaction']
             if self.answerContext.is_empty() or 'client_msg_id' in event:
-                await say(f"detected a reaction: {event['reaction']} unrelated to bot's last message")
-                logger.info(f"[Human-Human Reaction]: {event['reaction']}")
+                await say(f"detected a reaction: {reaction} unrelated to bot's last message")
+                logger.info(f"[Human-Human Reaction]: {reaction}")
                 return
 
+            POSTIVE_EMOJIS = set(
+                ["thumbsup", "+1", "white_check_mark", "raise_hand", "laughing", "point_up"])
+            NEGATIVE_EMOJIS = set(["thumbsdown", "-1"])
+
             feedback = Feedback(self.answerContext, event["reaction"])
-            if event["reaction"] in set(["thumbsdown", "-1"]):
+            if reaction in NEGATIVE_EMOJIS:
                 # TODO: revisit the answer or add self-criticism prompt
                 await say("You seemed to be unhappy with the answer.")
                 feedback.is_positive = False
-            elif event["reaction"] in set(["thumbsup", "+1"]):
+            elif reaction in POSTIVE_EMOJIS:
                 await say("Thank you for your positive feedback!")
                 feedback.is_positive = True
 
