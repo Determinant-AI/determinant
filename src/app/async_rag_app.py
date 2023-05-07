@@ -172,16 +172,17 @@ class LLMAnswerContext(Event):
     def is_empty(self):
         return self.raw_text == "" and self.prompt == "" and self.output_text == "" and self.model == "" and self.latency_sec == None
 
-    def _to_dict(self, json_str: str):
+    def to_dict(self, json_str: str) -> dict:
         json_str = json_str.replace('\n', '\\n').replace('#', '\\u0023')
         return json.loads(json_str)
 
     def get_response(self, json_str: str):
-        dic = self._to_dict(json_str)
-        return dic.get('response', "error: no response")
+        logger.info("get_response:{}".format(json_str))
+        dic = self.to_dict(json_str)
+        return dic.get('output_text', "error: no output_text")
 
     def loads(self, json_str: str):
-        return LLMAnswerContext(**self._to_dict(json_str))
+        return LLMAnswerContext(**self.to_dict(json_str))
 
 
 class Feedback(Event):
@@ -269,7 +270,7 @@ class RAGConversationBot(object):
         conv = LLMAnswerContext(input_text, prompt_text,
                                 response, self.model_name, latency)
 
-        logger.info(f"[Bot] conversation: {conv.toJson}")
+        logger.info(f"[Bot] conversation: {conv.toJson()}")
         return conv.toJson()
 
     async def __call__(self, http_request: Request) -> str:
