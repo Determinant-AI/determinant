@@ -1,8 +1,11 @@
 import logging
 import sys
 
+DEBUG = logging.DEBUG
+INFO = logging.INFO
 
-def create_logger(name, log_level=logging.INFO, log_format=None):
+
+def create_logger(name, log_level=INFO, log_format=None):
     if log_format is None:
         log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 

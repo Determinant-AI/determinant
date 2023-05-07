@@ -1,3 +1,4 @@
+import json
 import os
 import random
 from io import BytesIO
@@ -22,10 +23,10 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           StoppingCriteria, StoppingCriteriaList,
                           VisionEncoderDecoderModel, ViTImageProcessor)
 
-from logger import create_logger
+from logger import create_logger, DEBUG
 
 # Configure the logger.
-logger = create_logger(__name__)
+logger = create_logger(__name__, log_level=DEBUG)
 
 # Load a pre-trained SpaCy model for NER
 nlp = spacy.load('en_core_web_sm')
@@ -72,7 +73,6 @@ class DocumentVectorDB:
                  context_encoder: str = "facebook/dpr-ctx_encoder-single-nq-base"
                  ):
         self.token_limit = 512
-
         self.documents = self.format_documents()
         self.question_encoder = DPRQuestionEncoder.from_pretrained(
             question_encoder_model)
@@ -82,8 +82,10 @@ class DocumentVectorDB:
             context_encoder)
         self.context_tokenizer = DPRContextEncoderTokenizer.from_pretrained(
             context_encoder)
-        count = self.index_documents()
-        print("document count:{}".format(count))
+
+        self.count = self.index_documents()
+        logger.info(
+            "DocumentVectorDB initialized, document count:{}".format(self.count))
 
     def index_documents(self) -> int:
         # Encode the documents
@@ -100,12 +102,10 @@ class DocumentVectorDB:
         document_embeddings = np.ascontiguousarray(document_embeddings)
         # Create Faiss Index
         vector_dimension = document_embeddings.shape[1]
-        print("vector dimension:{}".format(vector_dimension))
+        logger.debug("vector dimension:{}".format(vector_dimension))
         self.index = faiss.IndexFlatL2(vector_dimension)
         faiss.normalize_L2(document_embeddings)
         self.index.add(document_embeddings)
-
-        # TODO: store index and avoid reindexing
         return self.index.ntotal
 
     def insert_documents(self) -> List[str]:
@@ -125,7 +125,7 @@ class DocumentVectorDB:
         query_embedding = self.encode_questions(query)
         _, idx = self.index.search(query_embedding, 4)
         doc = self.documents[idx[0][0]]
-        print("query result: index={}, doc={}".format(idx[0][0], doc))
+        logger.debug("query result: index={}, doc={}".format(idx[0][0], doc))
         return doc
 
     def format_documents(self):
@@ -149,6 +149,52 @@ class StopOnTokens(StoppingCriteria):
         return False
 
 
+class Event:
+    def __init__(self):
+        pass
+
+    def toJson(self) -> str:
+        # return the Json representation of the object
+        return json.dumps(self.__dict__)
+
+
+class LLMAnswerContext(Event):
+    def __init__(self, input_text: str = None, prompt: str = None, output_text: str = None, model: str = None, latency_sec: float = None, **kwargs):
+        self.raw_text = input_text if input_text else kwargs.get(
+            "raw_text", "")
+        self.prompt = prompt if prompt else kwargs.get("prompt", "")
+        self.output_text = output_text if output_text else kwargs.get(
+            "output_text", "")
+        self.model = model if model else kwargs.get("model", "")
+        self.latency_sec = latency_sec if latency_sec else kwargs.get(
+            "latency_sec", None)
+
+    def is_empty(self):
+        return self.raw_text == "" and self.prompt == "" and self.output_text == "" and self.model == "" and self.latency_sec == None
+
+    def to_dict(self, json_str: str) -> dict:
+        json_str = json_str.replace('\n', '\\n').replace('#', '\\u0023')
+        return json.loads(json_str)
+
+    def get_response(self, json_str: str):
+        logger.debug("get_response:{}".format(json_str))
+        dic = self.to_dict(json_str)
+        return dic.get('output_text', "error: no output_text")
+
+    def loads(self, json_str: str):
+        return LLMAnswerContext(**self.to_dict(json_str))
+
+
+class Feedback(Event):
+    def __init__(self, answer_context: LLMAnswerContext, reaction: str, is_positive: bool = None):
+        self.input_raw = answer_context.raw_text
+        self.input_prompt = answer_context.prompt
+        self.output_text = answer_context.output_text
+        self.model = answer_context.model
+        self.reaction = reaction
+        self.is_positive = is_positive
+
+
 @serve.deployment(num_replicas=1)  # ray_actor_options={"num_gpus": 0.5})
 class RAGConversationBot(object):
     def __init__(self,
@@ -160,6 +206,7 @@ class RAGConversationBot(object):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name).to(self.device)
+        self.model_name = model_name
 
     def to_retrieve(self, s: str) -> bool:
         # Perform NER on user input
@@ -202,9 +249,8 @@ class RAGConversationBot(object):
             return s[end_index:]
         return s  # Return the original string if the tag is not found
 
-    async def generate_text(self, thread_ts, input_text: str):
+    async def generate_text(self, thread_ts, input_text: str) -> str:
         prompt_text = await self.prompt(input_text)
-        assert isinstance(prompt_text, str)
         start = time.time()
         inputs = self.tokenizer(prompt_text, return_tensors="pt")
         tokens = self.model.generate(
@@ -216,13 +262,21 @@ class RAGConversationBot(object):
         )
         response = self.tokenizer.decode(tokens[0], skip_special_tokens=True)
         response = self.remove_prefix_until_tag(response)
+
+        latency = time.time() - start
         logger.info(
-            f"[Bot] generate response: {response}, latency: {time.time() - start}")
-        return response
+            f"[Bot] generate response: {response}, latency: {latency}")
+
+        conv = LLMAnswerContext(input_text, prompt_text,
+                                response, self.model_name, latency)
+
+        logger.info(f"[Bot] conversation: {conv.toJson()}")
+        return conv.toJson()
 
     async def __call__(self, http_request: Request) -> str:
         input_text: str = await http_request.json()
-        return await self.generate_text(input_text)
+        conv = await self.generate_text(input_text)
+        return conv
 
 
 @serve.deployment(num_replicas=1)
@@ -284,7 +338,7 @@ app = AsyncApp(
 
 @serve.deployment(route_prefix="/", num_replicas=1)
 class SlackAgent:
-    async def __init__(self, conversation_bot, image_captioning_bot):
+    async def __init__(self, conversation_bot, image_captioning_bot, event_handler: None):
         # TODO: add event handler to log events
         self.conversation_bot = conversation_bot
         self.caption_bot = image_captioning_bot
@@ -292,14 +346,35 @@ class SlackAgent:
         self.register()
         self.app_handler = AsyncSocketModeHandler(
             app, os.environ["SLACK_APP_TOKEN"])
+        self.event_handler = event_handler
+        self.answerContext = LLMAnswerContext()
         await self.app_handler.start_async()
 
     def register(self):
         @app.event("reaction_added")
-        async def handle_reaction_added_events(event, say):
-            # TODO: log events with feedback label
+        async def handle_reaction_added_events(event, say) -> None:
             logger.info(f"[Reaction] Reaction event: {event}")
-            say(f"reaction added: {event['reaction']}")
+
+            reaction = event['reaction']
+            if self.answerContext.is_empty() or 'client_msg_id' in event:
+                await say(f"detected a reaction: {reaction} unrelated to bot's last message")
+                logger.info(f"[Human-Human Reaction]: {reaction}")
+                return
+
+            POSTIVE_EMOJIS = set(
+                ["thumbsup", "+1", "white_check_mark", "raise_hand", "laughing", "point_up"])
+            NEGATIVE_EMOJIS = set(["thumbsdown", "-1"])
+
+            feedback = Feedback(self.answerContext, event["reaction"])
+            if reaction in NEGATIVE_EMOJIS:
+                # TODO: revisit the answer or add self-criticism prompt
+                await say("You seemed to be unhappy with the answer.")
+                feedback.is_positive = False
+            elif reaction in POSTIVE_EMOJIS:
+                await say("Thank you for your positive feedback!")
+                feedback.is_positive = True
+
+            logger.info(f"[Feedback]: {feedback.toJson()}")
 
         @app.event("app_mention")
         async def handle_app_mention(event, say):
@@ -310,19 +385,21 @@ class SlackAgent:
 
             logger.info(f"[Human Task] Handling the pinged event: {event}")
 
-            if "files" in event:
-                if "summarize" in event["text"].lower():
-                    response_ref = await self.caption_bot.caption_image.remote(
-                        event["files"][0]["url_private"]
-                    )
+            if "files" in event and "summarize" in event["text"].lower():
+                response_ref = await self.caption_bot.caption_image.remote(
+                    event["files"][0]["url_private"]
+                )
+                response = await response_ref
             else:
-                response_ref = await self.conversation_bot.generate_text.remote(
+                conv_ref = await self.conversation_bot.generate_text.remote(
                     thread_ts, human_text
                 )
+                conv = await conv_ref
+                response = self.answerContext.get_response(conv)
+                self.answerContext = self.answerContext.loads(conv)
 
-            response = await response_ref
             logger.info(
-                "[Bot Response] Replying to pinged message: {response}")
+                f"[Bot Response]: {response}")
 
             await say(response, thread_ts=thread_ts)
 
@@ -338,8 +415,16 @@ class SlackAgent:
         async def handle_pin_added_events(body, logger):
             logger.info(body)
 
+        @app.event("app_home_opened")
+        async def handle_app_home_opened_events(body, logger):
+            logger.info(body)
+
         @app.event("file_public")
         async def handle_file_public_events(body):
+            logger.info(body)
+
+        @app.event("group_left")
+        async def handle_group_left_events(body, logger):
             logger.info(body)
 
         @app.event("message")
@@ -350,18 +435,26 @@ class SlackAgent:
             elif random.random() < 0.5:
                 pass
             else:
-                # TODO: write a event handler to produce events.
-                logger.info(
-                    f"[Human] Replying unpinged message: {event}")
                 await handle_app_mention(event, say)
+
+
+@serve.deployment(num_replicas=1)
+class EventHandler:
+    def __init__(self):
+        pass
+
+    def handle(self, event):
+        pass
 
 
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
 image_captioning_bot = ImageCaptioningBot.bind()
+event_handler = EventHandler.bind()
 
 # ingress deployment
-slack_agent_deployment = SlackAgent.bind(rag_bot, image_captioning_bot)
+slack_agent_deployment = SlackAgent.bind(
+    rag_bot, image_captioning_bot, event_handler)
 # serve.run(slack_agent_deployment)
 
 # response = requests.post("http://127.0.0.1:3000/test", json={"prompt": "what is an ad event in advendio"})
