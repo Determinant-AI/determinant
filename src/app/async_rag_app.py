@@ -159,7 +159,7 @@ class Event:
 
 
 class LLMAnswerContext(Event):
-    def __init__(self, input_text: str = None, prompt: str = None, output_text: str = None, model: str = None, latency_sec: float = None, **kwargs):
+    def __init__(self, input_text: str = None, prompt: str = None, output_text: str = None, model: str = None, latency_sec: float = None, thread_ts: str = None, **kwargs):
         self.raw_text = input_text if input_text else kwargs.get(
             "raw_text", "")
         self.prompt = prompt if prompt else kwargs.get("prompt", "")
@@ -168,9 +168,11 @@ class LLMAnswerContext(Event):
         self.model = model if model else kwargs.get("model", "")
         self.latency_sec = latency_sec if latency_sec else kwargs.get(
             "latency_sec", None)
+        self.thread_ts = thread_ts if thread_ts else kwargs.get(
+            "thread_ts", None)
 
     def is_empty(self):
-        return self.raw_text == "" and self.prompt == "" and self.output_text == "" and self.model == "" and self.latency_sec == None
+        return self.raw_text == "" and self.prompt == "" and self.output_text == "" and self.model == "" and self.latency_sec == None and self.thread_ts == None
 
     def to_dict(self, json_str: str) -> dict:
         json_str = json_str.replace('\n', '\\n').replace('#', '\\u0023')
@@ -186,12 +188,14 @@ class LLMAnswerContext(Event):
 
 
 class Feedback(Event):
-    def __init__(self, answer_context: LLMAnswerContext, reaction: str, is_positive: bool = None):
+    def __init__(self, answer_context: LLMAnswerContext, reaction: str, is_positive: bool = None, feedback_giver: str = None):
         self.input_raw = answer_context.raw_text
         self.input_prompt = answer_context.prompt
         self.output_text = answer_context.output_text
+        self.thread_ts = answer_context.thread_ts
         self.model = answer_context.model
         self.reaction = reaction
+        self.feedback_giver = feedback_giver
         self.is_positive = is_positive
 
 
@@ -268,7 +272,7 @@ class RAGConversationBot(object):
             f"[Bot] generate response: {response}, latency: {latency}")
 
         conv = LLMAnswerContext(input_text, prompt_text,
-                                response, self.model_name, latency)
+                                response, self.model_name, thread_ts, latency)
 
         logger.info(f"[Bot] conversation: {conv.toJson()}")
         return conv.toJson()
@@ -353,26 +357,28 @@ class SlackAgent:
     def register(self):
         @app.event("reaction_added")
         async def handle_reaction_added_events(event, say) -> None:
+            POSTIVE_EMOJIS = set(
+                ["thumbsup", "+1", "white_check_mark", "raise_hand", "laughing", "point_up"])
+            NEGATIVE_EMOJIS = set(["thumbsdown", "-1"])
+
             logger.info(f"[Reaction] Reaction event: {event}")
 
             reaction = event['reaction']
+            reaction_author = event['user']
             if self.answerContext.is_empty() or 'client_msg_id' in event:
                 await say(f"detected a reaction: {reaction} unrelated to bot's last message")
                 logger.info(f"[Human-Human Reaction]: {reaction}")
                 return
 
-            POSTIVE_EMOJIS = set(
-                ["thumbsup", "+1", "white_check_mark", "raise_hand", "laughing", "point_up"])
-            NEGATIVE_EMOJIS = set(["thumbsdown", "-1"])
-
-            feedback = Feedback(self.answerContext, event["reaction"])
+            feedback = Feedback(self.answerContext, reaction, reaction_author)
+            thread_ts = feedback.thread_ts
             if reaction in NEGATIVE_EMOJIS:
                 # TODO: revisit the answer or add self-criticism prompt
-                await say("You seemed to be unhappy with the answer.")
                 feedback.is_positive = False
+                await say("You seemed to be unhappy with the answer.", thread_ts=thread_ts)
             elif reaction in POSTIVE_EMOJIS:
-                await say("Thank you for your positive feedback!")
                 feedback.is_positive = True
+                await say(f"<@{reaction_author}> Thank you for your positive feedback!", thread_ts=thread_ts)
 
             logger.info(f"[Feedback]: {feedback.toJson()}")
 
