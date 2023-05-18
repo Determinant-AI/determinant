@@ -3,9 +3,6 @@ name: Build and Deploy
 on:
   workflow_dispatch: {}
 
-env:
-  AWS_REGION: us-west-2
-
 
 jobs:
   deploy:
@@ -14,14 +11,36 @@ jobs:
     steps:
       - name: Checkout the files
         uses: actions/checkout@v2
-      - name: Deploy to Server 1
+      - name: Shutdown existing serve
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+            host: ${{ secrets.HOST }}
+            username: ec2-user
+            key: ${{ secrets.EC2_SSH_KEY }}
+            port: 22
+            script: |
+              /home/ec2-user/determinant/venv/bin/serve shutdown -y || true
+      - name: Copy files to ec2
         uses: easingthemes/ssh-deploy@v2.1.5
         env:
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
           REMOTE_HOST: ${{ secrets.HOST }}
           REMOTE_USER: ec2-user
-          SCRIPT_AFTER: |
-            . venv/bin/activate
-            pip install -r requirements.txt
-            cd src/app
-            serve run async_rag_app:slack_agent_deployment
+          TARGET: /home/ec2-user/determinant
+      - name: Deploy
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+            host: ${{ secrets.HOST }}
+            username: ec2-user
+            key: ${{ secrets.EC2_SSH_KEY }}
+            port: 22
+            script: |
+              cd determinant
+              . venv/bin/activate
+              pip install -r requirements.txt
+              cd src/app
+              PYTHONPATH="/home/ec2-user/determinant/src" \
+              SLACK_APP_TOKEN=${{ secrets.SLACK_APP_TOKEN }} \
+              SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }} \
+              SLACK_SIGNING_SECRET=${{ secrets.SLACK_SIGNING_SECRET }} \
+               serve run async_rag_app:slack_agent_deployment &>/dev/null &
