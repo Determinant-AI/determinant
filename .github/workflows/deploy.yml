@@ -1,0 +1,27 @@
+name: Build and Deploy
+
+on:
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: us-west-2
+
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the files
+        uses: actions/checkout@v2
+      - name: Deploy to Server 1
+        uses: easingthemes/ssh-deploy@v2.1.5
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.HOST }}
+          REMOTE_USER: ec2-user
+          SCRIPT_AFTER: |
+            . venv/bin/activate
+            pip install -r requirements.txt
+            cd src/app
+            serve run async_rag_app:slack_agent_deployment
