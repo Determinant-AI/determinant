@@ -1,3 +1,7 @@
+# one-click deployment to AWS EC2
+
+click `Run workflow` in https://github.com/Determinant-AI/determinant/actions/workflows/deploy.yml
+
 # Develop in AWS VM
 There's an AWS instance that constantly runs determinant app:
 
