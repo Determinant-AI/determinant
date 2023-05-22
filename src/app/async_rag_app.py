@@ -1,9 +1,9 @@
-import json
 import os
 import random
+import time
 from io import BytesIO
 from typing import List
-import time
+
 import faiss
 import numpy as np
 import requests
@@ -23,7 +23,9 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           StoppingCriteria, StoppingCriteriaList,
                           VisionEncoderDecoderModel, ViTImageProcessor)
 
-from logger import create_logger, DEBUG
+from data.event import Feedback, LLMAnswerContext
+from data.handler import EventHandler, SQSPublisher
+from logger import DEBUG, create_logger
 
 # Configure the logger.
 logger = create_logger(__name__, log_level=DEBUG)
@@ -149,56 +151,6 @@ class StopOnTokens(StoppingCriteria):
         return False
 
 
-class Event:
-    def __init__(self):
-        pass
-
-    def toJson(self) -> str:
-        # return the Json representation of the object
-        return json.dumps(self.__dict__)
-
-
-class LLMAnswerContext(Event):
-    def __init__(self, input_text: str = None, prompt: str = None, output_text: str = None, model: str = None, latency_sec: float = None, thread_ts: str = None, **kwargs):
-        self.raw_text = input_text if input_text else kwargs.get(
-            "raw_text", "")
-        self.prompt = prompt if prompt else kwargs.get("prompt", "")
-        self.output_text = output_text if output_text else kwargs.get(
-            "output_text", "")
-        self.model = model if model else kwargs.get("model", "")
-        self.latency_sec = latency_sec if latency_sec else kwargs.get(
-            "latency_sec", None)
-        self.thread_ts = thread_ts if thread_ts else kwargs.get(
-            "thread_ts", None)
-
-    def is_empty(self):
-        return self.raw_text == "" and self.prompt == "" and self.output_text == "" and self.model == "" and self.latency_sec == None and self.thread_ts == None
-
-    def to_dict(self, json_str: str) -> dict:
-        json_str = json_str.replace('\n', '\\n').replace('#', '\\u0023')
-        return json.loads(json_str)
-
-    def get_response(self, json_str: str):
-        logger.debug("get_response:{}".format(json_str))
-        dic = self.to_dict(json_str)
-        return dic.get('output_text', "error: no output_text")
-
-    def loads(self, json_str: str):
-        return LLMAnswerContext(**self.to_dict(json_str))
-
-
-class Feedback(Event):
-    def __init__(self, answer_context: LLMAnswerContext, reaction: str, is_positive: bool = None, feedback_giver: str = None):
-        self.input_raw = answer_context.raw_text
-        self.input_prompt = answer_context.prompt
-        self.output_text = answer_context.output_text
-        self.thread_ts = answer_context.thread_ts
-        self.model = answer_context.model
-        self.reaction = reaction
-        self.feedback_giver = feedback_giver
-        self.is_positive = is_positive
-
-
 @serve.deployment(num_replicas=1)  # ray_actor_options={"num_gpus": 0.5})
 class RAGConversationBot(object):
     def __init__(self,
@@ -240,6 +192,7 @@ class RAGConversationBot(object):
         - StableLM is more than just an information source, StableLM is also able to write poetry, short stories, and make jokes.
         - StableLM will refuse to participate in anything that could harm a human.
         """
+        # TODO: #end to hotfix the stableLM bug that returns the whole context
         result_prompt = f"{system_prompt}<|USER|>{user_input}#end<|ASSISTANT|>"
         return result_prompt
 
@@ -274,8 +227,9 @@ class RAGConversationBot(object):
         conv = LLMAnswerContext(input_text, prompt_text,
                                 response, self.model_name, latency, thread_ts)
 
-        logger.info(f"[Bot] conversation: {conv.toJson()}")
-        return conv.toJson()
+        context_str = conv.toJson()
+        logger.info(f"[Bot] conversation: {context_str}")
+        return context_str
 
     async def __call__(self, http_request: Request) -> str:
         input_text: str = await http_request.json()
@@ -342,7 +296,7 @@ app = AsyncApp(
 
 @serve.deployment(route_prefix="/", num_replicas=1)
 class SlackAgent:
-    async def __init__(self, conversation_bot, image_captioning_bot, event_handler: None):
+    async def __init__(self, conversation_bot, image_captioning_bot):
         # TODO: add event handler to log events
         self.conversation_bot = conversation_bot
         self.caption_bot = image_captioning_bot
@@ -350,7 +304,7 @@ class SlackAgent:
         self.register()
         self.app_handler = AsyncSocketModeHandler(
             app, os.environ["SLACK_APP_TOKEN"])
-        self.event_handler = event_handler
+        self.event_handler: SQSPublisher = SQSPublisher()
         self.answerContext = LLMAnswerContext()
         await self.app_handler.start_async()
 
@@ -375,14 +329,26 @@ class SlackAgent:
             if reaction in NEGATIVE_EMOJIS:
                 # TODO: revisit the answer or add self-criticism prompt
                 feedback.is_positive = False
+                # TODO: Fix bug thread_ts doesn't work
                 await say("You seemed to be unhappy with the answer.", thread_ts=thread_ts)
             elif reaction in POSTIVE_EMOJIS:
                 feedback.is_positive = True
-                await say(f"<@{reaction_author}> Thank you for your positive feedback!", thread_ts=thread_ts)
+                await say(f"<@{reaction_author}> Thank you for your positive feedback!",
+                          thread_ts=thread_ts)
 
+            logger.info("[Logging] Sending feedback event to SQS...")
+            response = self.event_handler.send_message(feedback.toJson())
+            status = response.get('HTTPStatusCode', None)
+            if response and status == 200:
+                length = response['content-length']
+                logger.info(
+                    f"[Logging] Feedback event sent to SQS successfully, content length {length}.")
+            else:
+                logger.error(
+                    "[Logging] Failed to send feedback event to SQS, status {status}.")
             logger.info(f"[Feedback]: {feedback.toJson()}")
 
-        @app.event("app_mention")
+        @ app.event("app_mention")
         async def handle_app_mention(event, say):
             human_text = ''
             if "text" in event:
@@ -407,31 +373,31 @@ class SlackAgent:
 
             await say(response, thread_ts=thread_ts)
 
-        @app.event("file_shared")
+        @ app.event("file_shared")
         async def handle_file_shared_events(event):
             logger.info(event)
 
-        @app.event("user_change")
+        @ app.event("user_change")
         async def handle_user_change_events(body):
             logger.info(body)
 
-        @app.event("pin_added")
+        @ app.event("pin_added")
         async def handle_pin_added_events(body, logger):
             logger.info(body)
 
-        @app.event("app_home_opened")
+        @ app.event("app_home_opened")
         async def handle_app_home_opened_events(body, logger):
             logger.info(body)
 
-        @app.event("file_public")
+        @ app.event("file_public")
         async def handle_file_public_events(body):
             logger.info(body)
 
-        @app.event("group_left")
+        @ app.event("group_left")
         async def handle_group_left_events(body, logger):
             logger.info(body)
 
-        @app.event("message")
+        @ app.event("message")
         async def handle_message_events(event, say):
             if '<@U04UTNRPEM9>' in event.get('text', ''):
                 # will get handled in app_mention
@@ -442,23 +408,12 @@ class SlackAgent:
                 await handle_app_mention(event, say)
 
 
-@serve.deployment(num_replicas=1)
-class EventHandler:
-    def __init__(self):
-        pass
-
-    def handle(self, event):
-        pass
-
-
 # model deployment
 rag_bot = RAGConversationBot.bind(DocumentVectorDB.bind())
 image_captioning_bot = ImageCaptioningBot.bind()
-event_handler = EventHandler.bind()
 
 # ingress deployment
-slack_agent_deployment = SlackAgent.bind(
-    rag_bot, image_captioning_bot, event_handler)
+slack_agent_deployment = SlackAgent.bind(rag_bot, image_captioning_bot)
 # serve.run(slack_agent_deployment)
 
 # response = requests.post("http://127.0.0.1:3000/test", json={"prompt": "what is an ad event in advendio"})
