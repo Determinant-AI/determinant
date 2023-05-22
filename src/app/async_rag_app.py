@@ -348,7 +348,7 @@ class SlackAgent:
                     "[Logging] Failed to send feedback event to SQS, status {status}.")
             logger.info(f"[Feedback]: {feedback.toJson()}")
 
-        @ app.event("app_mention")
+        @app.event("app_mention")
         async def handle_app_mention(event, say):
             human_text = ''
             if "text" in event:
@@ -373,31 +373,31 @@ class SlackAgent:
 
             await say(response, thread_ts=thread_ts)
 
-        @ app.event("file_shared")
+        @app.event("file_shared")
         async def handle_file_shared_events(event):
             logger.info(event)
 
-        @ app.event("user_change")
+        @app.event("user_change")
         async def handle_user_change_events(body):
             logger.info(body)
 
-        @ app.event("pin_added")
+        @app.event("pin_added")
         async def handle_pin_added_events(body, logger):
             logger.info(body)
 
-        @ app.event("app_home_opened")
+        @app.event("app_home_opened")
         async def handle_app_home_opened_events(body, logger):
             logger.info(body)
 
-        @ app.event("file_public")
+        @app.event("file_public")
         async def handle_file_public_events(body):
             logger.info(body)
 
-        @ app.event("group_left")
+        @app.event("group_left")
         async def handle_group_left_events(body, logger):
             logger.info(body)
 
-        @ app.event("message")
+        @app.event("message")
         async def handle_message_events(event, say):
             if '<@U04UTNRPEM9>' in event.get('text', ''):
                 # will get handled in app_mention
