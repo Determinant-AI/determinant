@@ -45,7 +45,7 @@ class SQSPublisher(EventHandler):
         secret = get_secret_value_response['SecretString']
         return secret
 
-    def send_message(self, message: str):
+    def send_message(self, message: str) -> dict:
         """
         Sample response:
         {'MD5OfMessageBody': 'fd087ec3a396840105c2fefe76670061',
