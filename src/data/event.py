@@ -1,5 +1,10 @@
 import json
 
+from logger import DEBUG, create_logger
+
+# Configure the logger.
+logger = create_logger(__name__, log_level=DEBUG)
+
 
 class Event:
     def __init__(self):
