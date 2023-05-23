@@ -24,7 +24,7 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           VisionEncoderDecoderModel, ViTImageProcessor)
 
 from data.event import Feedback, LLMAnswerContext
-from data.handler import EventHandler, SQSPublisher
+from data.handler import SQSPublisher
 from logger import DEBUG, create_logger
 
 # Configure the logger.

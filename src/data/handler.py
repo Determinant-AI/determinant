@@ -3,10 +3,8 @@ import os
 import boto3
 from .event import Event
 from .privacy_processor import PrivacyProcessor
-from ray import serve
 
 
-@serve.deployment(num_replicas=1)
 class EventHandler:
     def __init__(self, **kwargs):
         pass
