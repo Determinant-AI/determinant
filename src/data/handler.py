@@ -1,8 +1,9 @@
-from botocore.exceptions import ClientError
-from ray import serve
-from event import Event
 import os
+
 import boto3
+from event import Event
+from privacy_processor import PrivacyProcessor
+from ray import serve
 
 
 @serve.deployment(num_replicas=1)
@@ -25,25 +26,7 @@ class SQSPublisher(EventHandler):
         self.queue_url = self.sqs.get_queue_url(
             QueueName=queue_name)['QueueUrl']
 
-    def get_secret(self, secret_name: str = "sqs-producer-ci-user", region_name: str = "us-west-2"):
-        # Create a Secrets Manager client
-        session = boto3.session.Session()
-        client = session.client(
-            service_name='secretsmanager',
-            region_name=region_name
-        )
-        try:
-            get_secret_value_response = client.get_secret_value(
-                SecretId=secret_name
-            )
-        except ClientError as e:
-            # For a list of exceptions thrown, see
-            # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
-            raise e
-
-        # Decrypts secret using the associated KMS key.
-        secret = get_secret_value_response['SecretString']
-        return secret
+        self.privacy_masker = PrivacyProcessor()
 
     def send_message(self, message: str) -> dict:
         """
