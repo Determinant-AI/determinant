@@ -45,4 +45,5 @@ jobs:
               SLACK_APP_TOKEN=${{ secrets.SLACK_APP_TOKEN }} \
               SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }} \
               SLACK_SIGNING_SECRET=${{ secrets.SLACK_SIGNING_SECRET }} \
-               serve run async_rag_app:slack_agent_deployment &>/dev/null &
+               serve run async_rag_app:slack_agent_deployment
+              # serve run async_rag_app:slack_agent_deployment &>/dev/null &
