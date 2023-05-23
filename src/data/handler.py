@@ -1,8 +1,8 @@
 import os
 
 import boto3
-from event import Event
-from privacy_processor import PrivacyProcessor
+from .event import Event
+from .privacy_processor import PrivacyProcessor
 from ray import serve
 
 
