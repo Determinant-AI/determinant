@@ -109,5 +109,5 @@ wasabi==1.1.1
 wcwidth==0.2.6
 wrapt==1.15.0
 yarl==1.9.2
-boto3
-mypy-boto3-sqs
+boto3==1.26.138
+mypy-boto3-sqs==1.26.0
