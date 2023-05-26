@@ -60,3 +60,17 @@ for row in rows:
 
 # Close the connection
 conn.close()
+
+# output
+# Conversation ID: 1
+#     Timestamp: 2023-05-25 10:05:00, User Message: How are you? I hope you are doing well., Bot Response: I'm fine, thank you!, Running Length: 39, Message Length: 39
+#     Timestamp: 2023-05-25 10:00:00, User Message: Hello, Bot Response: Hi, Running Length: 44, Message Length: 5
+# Conversation ID: 2
+#     Timestamp: 2023-05-25 10:20:00, User Message: Thank you so much for your assistance., Bot Response: You're welcome! Feel free to ask if you have any more questions., Running Length: 38, Message Length: 38
+# Conversation ID: 3
+#     Timestamp: 2023-05-25 10:30:00, User Message: Alright, I will keep that in mind. Thank you!, Bot Response: You're welcome! Good luck with your database security., Running Length: 45, Message Length: 45
+#     Timestamp: 2023-05-25 10:25:00, User Message: I have another query. How can I secure my database?, Bot Response: Securing a database involves various aspects such as access controls, encryption, and regular updates., Running Length: 96, Message Length: 51
+# Conversation ID: 4
+#     Timestamp: 2023-05-25 10:40:00, User Message: What is the meaning of life?, Bot Response: The meaning of life is subjective and can vary for each individual., Running Length: 28, Message Length: 28
+#     Timestamp: 2023-05-25 10:35:00, User Message: Hi, Bot Response: Hello, Running Length: 30, Message Length: 2
+
