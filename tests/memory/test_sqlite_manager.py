@@ -1,6 +1,7 @@
-import sqlite3
-import datetime
-import random
+import pytest
+from datetime import datetime, timedelta
+from memory.sqlite_memory_manager import SQLMemoryManager
+
 
 # Generate sample workplace discussion data
 conversations = [
@@ -76,57 +77,55 @@ conversations = [
     },
 ]
 
+@pytest.fixture(scope='module')
+def manager():
+    # Create an instance of SQLMemoryManager for testing
+    manager = SQLMemoryManager(':memory:')
 
-# Connect to the database
-conn = sqlite3.connect('conversation_history.db')
-c = conn.cursor()
+    # Insert sample data into the conversation_history table
+    with patch('builtins.datetime', side_effect=lambda *args, **kwargs: datetime(*args, **kwargs)):
+        for conversation in conversations:
+            timestamp = conversation['timestamp']
+            conversation_id = conversation['conversation_id']
+            thread_ts = conversation['thread_ts']
+            handle = conversation['handle']
+            message = conversation['message']
+            manager.c.execute('''INSERT INTO conversation_history (timestamp, conversation_id, thread_ts, handle, message)
+                                  VALUES (?, ?, ?, ?, ?)''', (timestamp, conversation_id, thread_ts, handle, message))
 
-# Create the conversation_history table
-c.execute('''CREATE TABLE IF NOT EXISTS conversation_history
-                (timestamp TEXT, message TEXT, conversation_id INTEGER, thread_ts TEXT, handle TEXT)''')
+    yield manager
 
+    # Clean up the conversation_history table and close the connection
+    manager.conn.close()
 
-for conversation in conversations:
-    timestamp = conversation['timestamp']
-    conversation_id = conversation['conversation_id']
-    thread_ts = conversation['thread_ts']
-    handle = conversation['handle']
-    message = conversation['message']
-    c.execute('''INSERT INTO conversation_history (timestamp, conversation_id, thread_ts, handle, message)
-              VALUES (?, ?, ?, ?, ?)''', (timestamp, conversation_id, thread_ts, handle, message))
+def test_get_conversations_token_limit(manager):
+    token_limit = 200
+    prompt = manager.get_conversations(token_limit=token_limit)
 
-    
-# Execute the query to fetch conversations with running length and length
-c.execute('''SELECT ch.conversation_id, ch.timestamp, ch.handle, ch.message,
-                    SUM(LENGTH(ch.message)) OVER (PARTITION BY ch.conversation_id ORDER BY ch.timestamp DESC) AS running_length,
-                    LENGTH(ch.message) AS message_length
-             FROM conversation_history AS ch
-             ORDER BY ch.conversation_id, ch.timestamp DESC''')
+    expected_prompt = """Conversation ID: 1
+    Timestamp: 2023-05-25 09:00:00, Handle: user1, Message: Good morning, everyone! I hope you all had a great weekend. Just wanted to check in and see if everyone is ready for the upcoming project meeting., Running Length: 0, Message Length: 101
+    Timestamp: 2023-05-25 09:05:00, Handle: user2, Message: Good morning! Yes, I'm prepared for the meeting. Looking forward to discussing the project progress., Running Length: 61, Message Length: 93"""
 
-# Fetch the conversations with running length and length
-rows = c.fetchall()
-threshold = 500
+    assert prompt == expected_prompt
 
-# Process the conversations with running length and length
-prev_conversation_id = None
-for row in rows:
-    conversation_id = row[0]
-    timestamp = row[1]
-    handle = row[2]
-    message = row[3]
-    running_length = row[4]
-    message_length = row[5]
+def test_get_conversations_time_period(manager):
+    time_period = timedelta(hours=1)
+    prompt = manager.get_conversations(time_period=time_period)
 
-    # Check if the conversation ID changes
-    if conversation_id != prev_conversation_id:
-        print(f"Conversation ID: {conversation_id}")
+    expected_prompt = """Conversation ID: 2, Timestamp: 2023-05-25 10:25:00, Handle: bot, Message: Absolutely! Resource allocation and effective time management are key to meeting project deadlines. Let's discuss this further in the meeting."""
 
-    # Check if the running length is smaller than the threshold
-    if running_length < threshold:
-        print(f"    Timestamp: {timestamp}, Handle: {handle}, Message: {message}, Running Length: {running_length}, Message Length: {message_length}")
+    assert prompt == expected_prompt
 
-    # Update the previous conversation ID
-    prev_conversation_id = conversation_id
+def test_get_random_conversations(manager):
+    num_conversations = 2
+    prompt = manager.get_conversations(num_conversations=num_conversations)
+
+    # Uncomment the following lines to print the prompt for visual inspection
+    # print(prompt)
+    # print()
+
+    assert len(prompt.split('\n')) == num_conversations * 2
+
 
 # Conversation ID: 1
 #     Timestamp: 2023-05-25 09:15:00, Handle: bot, Message: Good morning! Sure, we can definitely address the project timeline during the meeting. I will provide an update on the timeline and any adjustments required., Running Length: 157, Message Length: 157
