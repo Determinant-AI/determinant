@@ -58,7 +58,9 @@ class ConfluenceIngester(object):
 # make it integration with Slack Ingestor
 # @serve.deployment()
 class DocumentLoader():
-    def __init__(self, ingestor: ConfluenceIngester, question_encoder_model: str = "facebook/dpr-question_encoder-single-nq-base", context_encoder_model: str = "facebook/dpr-ctx_encoder-single-nq-base"):
+    def __init__(self, ingestor: ConfluenceIngester, 
+                 question_encoder_model: str = "facebook/dpr-question_encoder-single-nq-base", 
+                 context_encoder_model: str = "facebook/dpr-ctx_encoder-single-nq-base"):
         self.question_encoder = DPRQuestionEncoder.from_pretrained(
             question_encoder_model)
         self.question_tokenizer = DPRQuestionEncoderTokenizer.from_pretrained(
@@ -126,7 +128,7 @@ class ConversationBot:
     #     return generator(await self.prompt(input_text))[0]["generated_text"]
 
     def generate_text(self, input_text: str) -> str:
-        generator = pipeline(model="databricks/dolly-v2-3b",
+        generator = pipeline(model=self.model,
                              torch_dtype=torch.bfloat16, trust_remote_code=True, device_map="auto")
 
         # generator = pipeline('text-generation', model='gpt2',
