@@ -1,3 +1,4 @@
+```
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 
 sudo sh Miniconda3-latest-Linux-x86_64.sh
@@ -18,3 +19,4 @@ sudo sh cuda_11.8.0_520.61.05_linux.run
 pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
 
 pip install -r requirements.txt
+```
