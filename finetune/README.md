@@ -29,4 +29,5 @@ This folder contains the code and instructions for fine-tuning a chatbot model u
 6. Modify Jupyter config file to enable running it from your browser(ip_address:8888):
    ```bash
    cp jupyter_notebook_config.py ~/.jupyter/
+   jupyter notebook --no-browser --port=8888
    ```
