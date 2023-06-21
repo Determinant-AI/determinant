@@ -14,22 +14,15 @@ This folder contains the code and instructions for fine-tuning a chatbot model u
    source ~/miniconda3/etc/profile.d/conda.sh
    conda activate chatbot
    ```
-3. Install GPU drivers:
+3. Install GPU drivers and CUDA compiler:
    ```bash
    curl https://raw.githubusercontent.com/GoogleCloudPlatform/compute-gpu-installation/main/linux/install_gpu_driver.py --output    install_gpu_driver.py
    sudo python3 install_gpu_driver.py
-   ```
-4. Install CUDA:
-   ```bash
    wget https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda_11.8.0_520.61.05_linux.run
    sudo sh cuda_11.8.0_520.61.05_linux.run
-
    ```
-5. Install PyTorch with GPU support:
+5. Install PyTorch with GPU support and other dependencies
    ```bash
    pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
-  ```
-6. Install other dependencies:
-   ```bash
    pip install -r requirements.txt
    ```
