@@ -6,6 +6,7 @@ click `Run workflow` in https://github.com/Determinant-AI/determinant/actions/wo
 There's an AWS instance that constantly runs determinant app:
 
 ### 1. Create Key pair: 
+
 Click the [link](https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#CreateKeyPair), with default to RSA and .pem, it will automatically download the private key `.perm` file to your local
 
 ### 2. Generate a public RSA key with the pem file
@@ -43,8 +44,6 @@ serve run async_rag_app:slack_agent_deployment
 ### 1. clone the git repo
 
 setup ssh key via [this link](https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh)
-
-```
 
 ### 2. create virtual env
 
