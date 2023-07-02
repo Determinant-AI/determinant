@@ -1,4 +1,4 @@
-name: Build and Deploy - uswest
+name: Build and Deploy - east
 
 on:
   workflow_dispatch: {}
@@ -14,25 +14,25 @@ jobs:
       - name: Shutdown existing serve
         uses: appleboy/ssh-action@v0.1.10
         with:
-            host: ${{ secrets.HOST }}
-            username: ec2-user
-            key: ${{ secrets.EC2_SSH_KEY }}
+            host: ${{ secrets.HOST_EAST }}
+            username: ubuntu
+            key: ${{ secrets.EC2_SSH_KEY_EAST }}
             port: 22
             script: |
               /home/ec2-user/determinant/venv/bin/serve shutdown -y || true
       - name: Copy files to ec2
         uses: easingthemes/ssh-deploy@v2.1.5
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          REMOTE_HOST: ${{ secrets.HOST }}
-          REMOTE_USER: ec2-user
-          TARGET: /home/ec2-user/determinant
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY_EAST }}
+          REMOTE_HOST: ${{ secrets.HOST_EAST }}
+          REMOTE_USER: ubuntu
+          TARGET: /home/ubuntu/determinant
       - name: Deploy
         uses: appleboy/ssh-action@v0.1.10
         with:
-            host: ${{ secrets.HOST }}
+            host: ${{ secrets.HOST_EAST }}
             username: ec2-user
-            key: ${{ secrets.EC2_SSH_KEY }}
+            key: ${{ secrets.EC2_SSH_KEY_EAST }}
             port: 22
             script: |
               cd determinant
