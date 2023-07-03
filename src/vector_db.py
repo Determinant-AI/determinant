@@ -18,7 +18,7 @@ class ActiveLoopVectorDB:
         embedding = TextEmbeddingFactory(embedding_model_name).create_embedding()
         self.embedding_func = embedding.embed
 
-    def add_documents(self, documents, use_batch=True, batch_size=100):
+    def add_documents(self, documents, metadata, use_batch=True, batch_size=100):
         if use_batch:
             num_chunks = len(documents) // batch_size + (len(documents) % batch_size > 0)
 
