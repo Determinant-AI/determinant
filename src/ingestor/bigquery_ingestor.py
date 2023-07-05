@@ -9,6 +9,7 @@ import openai
 from datetime import datetime
 import argparse
 import time
+from tqdm import tqdm
 
 # Set OpenAI API key
 #openai.openai.api_key = "sk-xxxx"
@@ -17,30 +18,37 @@ import time
 client = bigquery.Client(project="bigquery-public-data")
 datasets = client.list_datasets()
 all_data = []
-for dataset in datasets:
 
-    dataset_ref = client.get_dataset(dataset.dataset_id)
-    dataset_description = "" if dataset_ref.description is None else dataset_ref.description
-    tables = list(client.list_tables(dataset))  # Make an API request(s).
-    for table in tables:
+try:
+    for dataset in datasets:
 
-        table_dict = {}
-        table_id = table.table_id
-        full_id =  f"{client.project}.{dataset.dataset_id}.{table_id}"
+        dataset_ref = client.get_dataset(dataset.dataset_id)
+        dataset_description = "" if dataset_ref.description is None else dataset_ref.description
+        tables = list(client.list_tables(dataset))  # Make an API request(s).
+        for table in tables:
 
-        table_ref = client.get_table(full_id)  # Make an API request.
-        table_description = "" if table_ref.description is None else table_ref.description
-        column_names = [field.name for field in table_ref.schema]
-        table_dict['full_id'] = full_id
-        table_dict['columns'] = column_names
-        table_dict['description'] = dataset_description + "\n" + table_description
-        table_dict['num_rows'] = table_ref.num_rows
+            table_dict = {}
+            table_id = table.table_id
+            full_id =  f"{client.project}.{dataset.dataset_id}.{table_id}"
 
-        print(full_id)
-        all_data.append(table_dict)
+            table_ref = client.get_table(full_id)  # Make an API request.
+            table_description = "" if table_ref.description is None else table_ref.description
+            column_names = [field.name for field in table_ref.schema]
+            table_dict['full_id'] = full_id
+            table_dict['columns'] = column_names
+            table_dict['description'] = dataset_description + "\n" + table_description
+            table_dict['num_rows'] = table_ref.num_rows
+
+            print(full_id)
+            all_data.append(table_dict)
+
+except bigquery.ClientError as e:
+    print(f"BigQuery Client error occurred: {str(e)}")
+except Exception as e:
+    print(f"An error occurred: {str(e)}")
 
 # Filter out data with bad descriptions
-filtered_all_data = [d for d in all_data if len(d['description']) >= 10]
+filtered_all_data = [d for d in all_data if len(d['description']) >= 10 and len(d['columns']) > 1]
 
 with open("all_bigquery_tables.jsonl", "w") as outfile:
     for entry in filtered_all_data:
@@ -134,23 +142,46 @@ def make_requests(
 # Generate self-instruct data for fine-tuning
 template = """I have a table in bigquery:
 {table_metadata}
-Generate {num_q} questions followed by SQL code, make sure the generation data is diversified and cover different use cases.
-return a list of json object for your generated data
+Generate a pair of relevant question and corresponding SQL code, make sure the generated pairs is diversified and cover different use cases.
+Return a list of json object keyed by "question" and "sql" for your generation, use escape double quotes(\") in SQL code
 """
 
 output_sql_qa = []
-for batch in range(0, 100):
-    prompt = template.format(table_metadata=str(filtered_all_data[batch]), num_q=10)
+# num_batches = len(filtered_all_data)
+num_batches = len(filtered_all_data)
+for i in tqdm(range(num_batches)):
+    prompt = template.format(table_metadata=str(filtered_all_data[i]), num_q=1)
     response = openai.Completion.create(
         engine='text-davinci-003',  # Replace with the appropriate GPT-4 engine name
         prompt=prompt,
+        temperature=1,
+        top_p=1,
+        n=5,
         max_tokens=4097 - len(prompt)  # Replace with the desired maximum number of tokens for the completion
     )
     text = response.choices[0].text
 
     # Post-processing of generated texts
     # Split the text into lines
-    lines = text.strip().split('\n')
+    # lines = text.strip().split('\n')
+    output = None
+    print(text)
+    try:
+        output = json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {str(e)}")
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+
+    if output is not None:
+        _ = [o.update({'context': filtered_all_data[i]}) for o in output]
+        output_sql_qa.extend(output)
+
+
+with open("output_sql_qa.jsonl", "w") as outfile:
+    for entry in filtered_all_data:
+        json.dump(entry, outfile)
+        outfile.write('\n')
 
 
 
